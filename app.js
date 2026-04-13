@@ -1,7 +1,7 @@
 ﻿/**********************************************
  * My Black Window - Dashboard
- * Версия 3.9.3
- * - Watchdog для принудительного зацикливания видео
+ * Версия 3.9.4
+ * - Убран preventDefault при старте нажатия в климатических слотах
  **********************************************/
 
 const TOKEN = window.ANDROID_TOKEN || "SECURE_TOKEN_2025";
@@ -56,7 +56,7 @@ const App = (function() {
   }
 
   function makeLongPressable(element, callback, options = {}) {
-    const { delay = 700, ripple = true } = options;
+    const { delay = 700, ripple = true, preventDefaultOnStart = false } = options;
     let pressTimer, longPressTriggered = false;
     const addRipple = (e) => {
       if (!ripple) return;
@@ -74,15 +74,18 @@ const App = (function() {
     const start = (e) => {
       longPressTriggered = false;
       clearTimeout(pressTimer);
-      e.preventDefault();
+      if (preventDefaultOnStart) e.preventDefault();
       pressTimer = setTimeout(() => { longPressTriggered = true; addRipple(e); callback(element, e); }, delay);
     };
     const cancel = () => clearTimeout(pressTimer);
     const end = (e) => {
       clearTimeout(pressTimer);
-      if (longPressTriggered) { e?.preventDefault(); longPressTriggered = false; }
+      if (longPressTriggered) {
+        e?.preventDefault();
+        longPressTriggered = false;
+      }
     };
-    element.addEventListener('touchstart', start, { passive: false });
+    element.addEventListener('touchstart', start, { passive: !preventDefaultOnStart });
     element.addEventListener('touchend', end);
     element.addEventListener('touchcancel', cancel);
     element.addEventListener('mousedown', start);
@@ -110,7 +113,6 @@ const App = (function() {
     ];
     let preloadImage = null, preloadAbortController = null;
 
-    // Видеофон
     let videoElement = document.getElementById('video-background');
     if (!videoElement) {
       videoElement = document.createElement('video');
@@ -549,7 +551,7 @@ const App = (function() {
     return { updateMusicInfo, init };
   })();
 
-  // --- Климат ---
+  // --- Климат (без preventDefault при старте) ---
   modules.climate = (function() {
     let climateCommands = [], climateState = {};
     const fallback = [
@@ -611,7 +613,7 @@ const App = (function() {
       picker.addEventListener('click',e=>{ if(e.target===picker) picker.classList.remove('open'); });
       document.querySelectorAll('.climate_slot').forEach(s=>{
         const id=s.dataset.climateSlot;
-        makeLongPressable(s,()=>open(id),{delay:700});
+        makeLongPressable(s,()=>open(id),{delay:700, preventDefaultOnStart: false});
         s.addEventListener('click',e=>{
           if(e.detail===0) return;
           const saved=storage.load(`climate_slot_${id}`); if(!saved){ open(id); return; }
