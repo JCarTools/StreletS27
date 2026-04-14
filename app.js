@@ -1,8 +1,8 @@
-﻿/**********************************************
+/**********************************************
  * My Black Window - Dashboard
- * Версия 3.9.6
- * - Ограничена ширина полосы прогресса плеера
- * - Исправлена блокировка коротких нажатий в климате
+ * Версия 3.9.8
+ * - Исправлены кнопки загрузки своих обоев и живых обоев
+ * - Добавлена принудительная активация input через click
  **********************************************/
 
 const TOKEN = window.ANDROID_TOKEN || "SECURE_TOKEN_2025";
@@ -10,7 +10,7 @@ const TOKEN = window.ANDROID_TOKEN || "SECURE_TOKEN_2025";
 const App = (function() {
   "use strict";
 
-  const DEBUG = false;
+  const DEBUG = true; // Временно включим для отладки
   const log = (...args) => DEBUG && console.log("[App]", ...args);
   const warn = (...args) => console.warn("[App]", ...args);
   const error = (...args) => console.error("[App]", ...args);
@@ -535,11 +535,9 @@ const App = (function() {
       if (artistEl) artistEl.textContent = data.SongArtist || "";
       if (imgEl && data.SongAlbumPicture) imgEl.src = "data:image/png;base64," + data.SongAlbumPicture;
       const pos = parseFloat(data.Trpos||0), dur = parseFloat(data.Trdur||1);
-      // Ограничение максимальной ширины через CSS уже установлено (max-width: calc(100% - 5rem))
-      // но на всякий случай также ограничим проценты, если dur бесконечность или очень большое
       let percent = (pos / dur) * 100;
-      if (dur === Infinity || dur > 86400000) { // если длительность > 24 часов или бесконечность
-        percent = 0; // не показываем прогресс
+      if (dur === Infinity || dur > 86400000) {
+        percent = 0;
       }
       if (progressEl) progressEl.style.width = Math.min(percent, 100) + "%";
       const format = t => { const m = Math.floor(t/60000), s = Math.floor((t%60000)/1000); return m+":"+String(s).padStart(2,'0'); };
@@ -561,14 +559,14 @@ const App = (function() {
     return { updateMusicInfo, init };
   })();
 
-  // --- Климат (без preventDefault при старте, убрана проверка e.detail) ---
+  // --- Климат (исправлены команды off для лобового и заднего стекла) ---
   modules.climate = (function() {
     let climateCommands = [], climateState = {};
     const fallback = [
       { cmd: "heat_seat_l", label: "Подогрев\nводителя", max:3, icon:"icons/Seat heated_left.svg" },
       { cmd: "heat_seat_r", label: "Подогрев\nпассажира", max:3, icon:"icons/Seat heated_right.svg" },
-      { cmd: "heat_windshield_on", label: "Подогрев\nлобового", max:1, icon:"icons/Windshield defroster.svg" },
-      { cmd: "heat_rearwindow_on", label: "Подогрев\nзаднего", max:1, icon:"icons/Rare windshield defroster.svg" },
+      { cmd: "heat_windshield_on", label: "Подогрев\nлобового", max:1, icon:"icons/Windshield defroster.svg", off: "heat_windshield_off" },
+      { cmd: "heat_rearwindow_on", label: "Подогрев\nзаднего", max:1, icon:"icons/Rare windshield defroster.svg", off: "heat_rearwindow_off" },
       { cmd: "vent_seat_l", label: "Вентиляция\nводителя", max:3, icon:"icons/Seat vent_left.svg" },
       { cmd: "vent_seat_r", label: "Вентиляция\nпассажира", max:3, icon:"icons/Seat vent_right.svg" },
       { cmd: "heat_wheel_on", label: "Подогрев\nруля", max:1, icon:"icons/Steering wheel heat.svg", off: "heat_wheel_off" },
@@ -588,6 +586,8 @@ const App = (function() {
           const base = { cmd:c, label:formatLabel(c), max:c.includes('seat')?3:1 };
           if (c === 'heat_zad_seat_r') base.off = 'heat_zad_seat_r_off';
           if (c === 'heat_wheel_on') base.off = 'heat_wheel_off';
+          if (c === 'heat_windshield_on') base.off = 'heat_windshield_off';
+          if (c === 'heat_rearwindow_on') base.off = 'heat_rearwindow_off';
           return base;
         });
         for(let c of climateCommands){ try{ const p=android.getRunEnumPic(c.cmd); c.icon=p?`data:image/png;base64,${p}`:'icons/Default.svg'; }catch{ c.icon='icons/Default.svg'; } }
@@ -606,7 +606,17 @@ const App = (function() {
     }
     function updateAll(){ document.querySelectorAll('.climate_slot').forEach(renderSlot); }
     function turnOffAll(){
-      for(let i=1;i<=4;i++){ const cmd=storage.load(`climate_slot_${i}`); if(!cmd) continue; const c=climateCommands.find(x=>x.cmd===cmd); if(c){ android.runEnum(getOff(c)); climateState[cmd]=0; } }
+      for(let i=1;i<=4;i++){ 
+        const cmd=storage.load(`climate_slot_${i}`); 
+        if(!cmd) continue; 
+        const c=climateCommands.find(x=>x.cmd===cmd); 
+        if(c){ 
+          const offCmd = getOff(c);
+          log(`Turning off slot ${i}: ${offCmd}`);
+          android.runEnum(offCmd); 
+          climateState[cmd]=0; 
+        } 
+      }
       updateAll();
     }
     function initPicker(){
@@ -625,7 +635,6 @@ const App = (function() {
         const id=s.dataset.climateSlot;
         makeLongPressable(s,()=>open(id),{delay:700, preventDefaultOnStart: false});
         s.addEventListener('click',e=>{
-          // проверка убрана для корректной работы коротких нажатий
           const saved=storage.load(`climate_slot_${id}`); if(!saved){ open(id); return; }
           const c=climateCommands.find(x=>x.cmd===saved); if(!c) return;
           const max=c.max||1, curLvl=climateState[saved]||0, next=(curLvl+1)%(max+1);
@@ -721,23 +730,44 @@ const App = (function() {
       });
     });
 
-    document.getElementById('customImageInput')?.addEventListener('change', (e) => {
-      const file = e.target.files[0];
-      if (file) {
-        modules.wallpaper.setCustomImage(file);
-        sidebar.classList.remove('open');
-      }
-      e.target.value = '';
-    });
+    // Исправление для кнопок загрузки своих обоев
+    const customImageLabel = document.querySelector('label[for="customImageInput"]');
+    const customImageInput = document.getElementById('customImageInput');
+    if (customImageLabel && customImageInput) {
+      customImageLabel.addEventListener('click', (e) => {
+        e.preventDefault();
+        log('Opening file picker for image');
+        customImageInput.click();
+      });
+      customImageInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) {
+          log('Image file selected:', file.name);
+          modules.wallpaper.setCustomImage(file);
+          sidebar.classList.remove('open');
+        }
+        e.target.value = '';
+      });
+    }
 
-    document.getElementById('customVideoInput')?.addEventListener('change', (e) => {
-      const file = e.target.files[0];
-      if (file) {
-        modules.wallpaper.setVideoBackground(file);
-        sidebar.classList.remove('open');
-      }
-      e.target.value = '';
-    });
+    const customVideoLabel = document.querySelector('label[for="customVideoInput"]');
+    const customVideoInput = document.getElementById('customVideoInput');
+    if (customVideoLabel && customVideoInput) {
+      customVideoLabel.addEventListener('click', (e) => {
+        e.preventDefault();
+        log('Opening file picker for video');
+        customVideoInput.click();
+      });
+      customVideoInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) {
+          log('Video file selected:', file.name);
+          modules.wallpaper.setVideoBackground(file);
+          sidebar.classList.remove('open');
+        }
+        e.target.value = '';
+      });
+    }
 
     document.getElementById('presetVideoKamin')?.addEventListener('click', () => {
       modules.wallpaper.setVideoBackground('images/kamin HD.mp4');
