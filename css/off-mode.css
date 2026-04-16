@@ -18,20 +18,24 @@ body.off-mode .widget_climate {
   opacity: 1;
   pointer-events: auto;
 }
+
+/* РАЗБЛОКИРОВКА: все виджеты теперь кликабельны */
 body.off-mode .widget_apps {
   animation: slideInFromRight 3.12s ease-out forwards;
   opacity: 1;
-  pointer-events: none;
+  pointer-events: auto;
 }
+
 body.off-mode .right-buttons {
   animation: slideInFromRight 3.12s ease-out 0.39s forwards;
   opacity: 1;
-  pointer-events: none;
+  pointer-events: auto;
 }
+
 body.off-mode .widget_player {
   animation: slideInFromLeft 3.12s ease-out 0.78s forwards;
   opacity: 1;
-  pointer-events: none;
+  pointer-events: auto;
 }
 
 @keyframes slideInFromLeft {
@@ -43,7 +47,7 @@ body.off-mode .widget_player {
   100% { opacity: 1; transform: translateX(0); }
 }
 
-/* Часы в off-режиме – оригинальные flip-digit */
+/* Часы в off-режиме – оригинальные flip-digit, без синей подсветки */
 body.off-mode .widget_time {
   position: fixed;
   top: 35%;
@@ -60,6 +64,26 @@ body.off-mode .widget_time {
   pointer-events: auto;
   cursor: pointer;
   animation: moonRise 3.12s ease-out forwards;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Убираем синюю подсветку с цифр */
+body.off-mode .flip-digit,
+body.off-mode .flip-digit::selection,
+body.off-mode .flip-digit::-moz-selection {
+  background: rgba(20, 20, 30, 0.4) !important;
+  color: rgba(200, 200, 200, 0.5) !important;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+/* Запрещаем выделение текста внутри часов */
+body.off-mode .flip-clock,
+body.off-mode .flip-clock * {
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 @keyframes moonRise {
