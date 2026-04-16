@@ -1,0 +1,84 @@
+/* === ШТОРКИ И МОДАЛКИ === */
+.picker-drawer {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  background: #1a1c24;
+  border-radius: 1.5rem 1.5rem 0 0;
+  padding: 1.5rem;
+  transform: translateY(100%);
+  transition: transform 0.3s;
+  z-index: 2000;
+  max-height: 80vh; overflow-y: auto;
+}
+
+.modal-overlay {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  background: rgba(0,0,0,0.7);
+  backdrop-filter: blur(5px);
+  border-radius: 0;
+  transform: none;
+  opacity: 0;
+  pointer-events: none;
+  padding: 1rem;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  z-index: 2500;
+}
+.modal-overlay.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+.modal-content {
+  background: #1a1c24;
+  border-radius: 1.5rem;
+  padding: 1.5rem;
+  width: 90%;
+  max-width: 500px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+  max-height: 90vh;
+  overflow-y: auto;
+  margin-top: 2rem;
+}
+.modal-content h3 { margin-bottom: 1rem; }
+.modal-content input {
+  width: 100%; padding: 0.8rem; font-size: 1.2rem;
+  background: #2a2a35; border: 1px solid #444; border-radius: 1rem;
+  color: white; margin-bottom: 1.5rem;
+}
+.modal-buttons { display: flex; gap: 1rem; justify-content: flex-end; }
+.modal-btn {
+  padding: 0.6rem 1.5rem; border-radius: 1rem; border: none;
+  font-size: 1.1rem; cursor: pointer;
+}
+.modal-btn.save { background: #2e7d32; color: white; }
+.modal-btn.cancel { background: #555; color: white; }
+
+.picker-drawer.open { transform: translateY(0); }
+.drawer-header { display: flex; justify-content: space-between; margin-bottom: 1rem; }
+.drawer-title { font-size: 1.3rem; }
+.drawer-close { background: none; border: none; color: white; font-size: 1.8rem; cursor: pointer; }
+.picker-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
+.picker-item {
+  display: flex; flex-direction: column; align-items: center; gap: 0.4rem;
+  padding: 0.8rem; border-radius: 1rem; cursor: pointer;
+  transition: background 0.2s;
+}
+.picker-item:hover { background: rgba(42, 39, 48, 0.8); }
+.picker-item img { width: 3rem; height: 3rem; }
+.picker-item span { font-size: 0.8rem; text-align: center; }
+
+/* === САЙДБАР ОБОЕВ === */
+.sidebar {
+  position: fixed; right: 0; top: 0; width: 300px; height: 100%;
+  background: #333; color: white; transition: transform 0.3s;
+  transform: translateX(100%); z-index: 1000; padding: 20px;
+  overflow-y: auto;
+}
+.sidebar.open { transform: translateX(0); }
+.wallpaper-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.wallpaper-item img { width: 100%; cursor: pointer; border-radius: 0.5rem; }
+
+.hidden { display: none; }

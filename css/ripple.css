@@ -1,0 +1,10 @@
+/* === RIPPLE ЭФФЕКТ === */
+.ripple {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.3);
+  transform: scale(0);
+  animation: ripple-animation 0.5s ease-out;
+  pointer-events: none;
+}
+@keyframes ripple-animation { to { transform: scale(4); opacity: 0; } }
