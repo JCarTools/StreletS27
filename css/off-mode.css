@@ -7,7 +7,6 @@ body.off-mode #btnClose {
   pointer-events: none;
 }
 
-/* Надпись просто скрывается */
 body.off-mode .brand-footer {
   opacity: 0;
   pointer-events: none;
@@ -19,7 +18,6 @@ body.off-mode .widget_climate {
   pointer-events: auto;
 }
 
-/* РАЗБЛОКИРОВКА: все виджеты теперь кликабельны */
 body.off-mode .widget_apps {
   animation: slideInFromRight 3.12s ease-out forwards;
   opacity: 1;
@@ -47,7 +45,7 @@ body.off-mode .widget_player {
   100% { opacity: 1; transform: translateX(0); }
 }
 
-/* Часы в off-режиме – оригинальные flip-digit, без синей подсветки */
+/* Часы в off-режиме – луна в центре, без подписи */
 body.off-mode .widget_time {
   position: fixed;
   top: 35%;
@@ -69,7 +67,11 @@ body.off-mode .widget_time {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* Убираем синюю подсветку с цифр */
+/* Скрываем подпись в off-режиме */
+body.off-mode .widget_time__signature {
+  display: none;
+}
+
 body.off-mode .flip-digit,
 body.off-mode .flip-digit::selection,
 body.off-mode .flip-digit::-moz-selection {
@@ -79,7 +81,6 @@ body.off-mode .flip-digit::-moz-selection {
   user-select: none;
 }
 
-/* Запрещаем выделение текста внутри часов */
 body.off-mode .flip-clock,
 body.off-mode .flip-clock * {
   user-select: none;
@@ -102,6 +103,63 @@ body.off-mode .flip-clock * {
     opacity: 1;
     filter: blur(0);
   }
+}
+
+/* Выход из off-режима: луна уходит вниз на своё место */
+body:not(.off-mode) .widget_time {
+  position: fixed;
+  top: 35%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(1);
+  animation: moonSet 1.2s ease-in forwards;
+  pointer-events: auto;
+  cursor: pointer;
+  z-index: 100;
+  background: transparent;
+  backdrop-filter: none;
+  box-shadow: none;
+  width: auto;
+  height: auto;
+  padding: 0;
+}
+
+@keyframes moonSet {
+  0% {
+    top: 35%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+    filter: blur(0);
+  }
+  100% {
+    top: calc(100% - var(--dashboard-bottom) - var(--widget-size) / 2);
+    left: calc(var(--dashboard-left-right) + var(--widget-size) / 2);
+    transform: translate(-50%, -50%) scale(0.6);
+    opacity: 0;
+    filter: blur(8px);
+  }
+}
+
+/* После завершения анимации (когда класс off-mode уже удалён) переопределяем стили часов на штатные */
+body:not(.off-mode) .widget_time {
+  position: relative !important;
+  top: auto !important;
+  left: auto !important;
+  transform: none !important;
+  width: var(--widget-size);
+  height: var(--widget-size);
+  background: var(--bg-widget);
+  backdrop-filter: blur(10px);
+  border-radius: 1.5rem;
+  padding: 0.8rem;
+  opacity: 1;
+  animation: none;
+  visibility: visible;
+}
+
+/* Показываем подпись в обычном режиме */
+body:not(.off-mode) .widget_time__signature {
+  display: block;
 }
 
 body.off-mode .flip-clock { gap: clamp(0.2rem, 1vw, 0.5rem); }
@@ -142,7 +200,6 @@ body.off-mode .widget_time.glowing .flip-digit {
   }
 }
 
-/* Возврат из off-mode */
 body:not(.off-mode) .widget_climate,
 body:not(.off-mode) .widget_apps,
 body:not(.off-mode) .right-buttons,
@@ -153,69 +210,10 @@ body:not(.off-mode) .widget_player {
   animation: none;
 }
 
-body:not(.off-mode) .widget_time {
-  animation: moonSet 3.12s ease-out forwards;
-  pointer-events: auto;
-  cursor: pointer;
+body:not(.off-mode) .brand-footer .char {
+  animation: none;
+  opacity: 1;
 }
-@keyframes moonSet {
-  0% {
-    position: fixed;
-    top: 35%;
-    left: 50%;
-    transform: translate(-50%, -50%) scale(1);
-    width: auto;
-    height: auto;
-    background: transparent;
-    backdrop-filter: none;
-    box-shadow: none;
-    padding: 0;
-    opacity: 1;
-    filter: blur(0);
-  }
-  50% {
-    position: fixed;
-    top: calc(100% - var(--dashboard-bottom) - var(--widget-size) / 2);
-    left: calc(var(--dashboard-left-right) + var(--widget-size) / 2);
-    transform: translate(-50%, -50%) scale(0.8);
-    width: auto;
-    height: auto;
-    background: transparent;
-    backdrop-filter: none;
-    box-shadow: none;
-    padding: 0;
-    opacity: 0.5;
-    filter: blur(4px);
-  }
-  100% {
-    position: relative;
-    top: auto;
-    left: auto;
-    transform: none;
-    width: var(--widget-size);
-    height: var(--widget-size);
-    background: var(--bg-widget);
-    backdrop-filter: blur(10px);
-    border-radius: 1.5rem;
-    padding: 0.8rem;
-    opacity: 1;
-    filter: blur(0);
-  }
-}
-body:not(.off-mode) .widget_time {
-  position: relative;
-  width: var(--widget-size);
-  height: var(--widget-size);
-  background: var(--bg-widget);
-  backdrop-filter: blur(10px);
-  border-radius: 1.5rem;
-  padding: 0.8rem;
-}
-body:not(.off-mode) .flip-digit { font-size: 2.8rem; background: #1a1c24; color: #e0e0e0; }
-body:not(.off-mode) .flip-separator { font-size: 2.8rem; }
-body:not(.off-mode) .widget_time__date,
-body:not(.off-mode) .widget_time__weekday { display: block; }
-body:not(.off-mode) .brand-footer .char { animation: none; opacity: 1; }
 body:not(.off-mode)::before {
   opacity: 0;
   transition: opacity 3.12s ease;

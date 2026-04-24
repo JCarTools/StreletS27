@@ -1,5 +1,6 @@
 /**********************************************
  * Модуль: Обои (статические, авто, видео)
+ * Исправлено: видео появляется только после реального старта воспроизведения
  **********************************************/
 
 modules.wallpaper = (function() {
@@ -21,17 +22,22 @@ modules.wallpaper = (function() {
     videoElement.muted = true;
     videoElement.loop = true;
     videoElement.playsInline = true;
+    videoElement.preload = 'auto';
+    videoElement.controls = false;
+    videoElement.disablePictureInPicture = true;
+    // Изначально скрыто и без прозрачности – появится только после playing
     videoElement.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; object-fit:cover; z-index:-1; pointer-events:none; display:none;';
     document.body.appendChild(videoElement);
   }
 
   let videoWatchdogInterval = null;
+  let videoReadyToShow = false;
 
   function stopWatchdog() { if (videoWatchdogInterval) { clearInterval(videoWatchdogInterval); videoWatchdogInterval = null; } }
   function startWatchdog() {
     stopWatchdog();
     videoWatchdogInterval = setInterval(() => {
-      if (videoElement && videoElement.style.display === 'block' && videoElement.paused) {
+      if (videoElement && videoElement.style.display === 'block' && videoElement.paused && videoElement.currentTime > 0) {
         videoElement.play().catch(e => warn('Watchdog play failed:', e));
       }
     }, 1000);
@@ -47,6 +53,7 @@ modules.wallpaper = (function() {
   }
 
   function getRandomSource() { return IMAGE_SOURCES[Math.floor(Math.random() * IMAGE_SOURCES.length)]; }
+  
   async function fetchImage(url, timeoutMs = 8000) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
@@ -59,6 +66,7 @@ modules.wallpaper = (function() {
       return new Promise(r => { const fr = new FileReader(); fr.onloadend = () => r(fr.result); fr.readAsDataURL(blob); });
     } finally { clearTimeout(timeout); }
   }
+  
   function getCache() { return storage.load(CACHE_KEY) || []; }
   function saveCache(cache) {
     const unique = [...new Set(cache)];
@@ -80,6 +88,7 @@ modules.wallpaper = (function() {
     return img;
   }
   function resetCacheIndex() { storage.save(CACHE_INDEX_KEY, 0); }
+  
   async function preloadNextWallpaper() {
     if (preloadAbortController) preloadAbortController.abort();
     preloadAbortController = new AbortController();
@@ -93,6 +102,7 @@ modules.wallpaper = (function() {
     } catch (e) { preloadImage = null; }
     finally { preloadAbortController = null; }
   }
+  
   function applyWallpaper(base64) {
     clearVideoBackground();
     document.body.style.backgroundImage = `url("${base64}")`;
@@ -107,19 +117,63 @@ modules.wallpaper = (function() {
       videoElement.pause();
       videoElement.src = '';
       videoElement.style.display = 'none';
+      videoElement.style.opacity = '';
       videoElement.removeEventListener('ended', handleVideoEnded);
+      // удаляем временных слушателей
+      const newVideo = videoElement.cloneNode(true);
+      videoElement.parentNode.replaceChild(newVideo, videoElement);
+      videoElement = newVideo;
+      // перепривязываем стили
+      videoElement.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; object-fit:cover; z-index:-1; pointer-events:none; display:none;';
     }
     document.body.classList.remove('has-video-background');
   }
 
   function setVideoBackground(fileOrUrl) {
-    let url = typeof fileOrUrl === 'string' ? fileOrUrl : URL.createObjectURL(fileOrUrl);
-    clearVideoBackground();
-    videoElement.src = url;
-    videoElement.style.display = 'block';
+    const url = typeof fileOrUrl === 'string' ? encodeURI(fileOrUrl) : URL.createObjectURL(fileOrUrl);
+    clearVideoBackground(); // полностью пересоздаём video элемент
+    
+    videoElement.muted = true;
     videoElement.loop = true;
+    videoElement.playsInline = true;
+    videoElement.preload = 'auto';
+    videoElement.controls = false;
+    videoElement.disablePictureInPicture = true;
+    videoElement.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; object-fit:cover; z-index:-1; pointer-events:none; display:none;';
+    
+    videoElement.src = url;
+    
+    const showVideo = () => {
+      videoElement.style.display = 'block';
+      videoElement.style.opacity = '0';
+      // небольшая задержка для apply styles
+      setTimeout(() => {
+        videoElement.style.transition = 'opacity 0.6s ease';
+        videoElement.style.opacity = '1';
+      }, 20);
+    };
+    
+    const onPlaying = () => {
+      videoElement.removeEventListener('playing', onPlaying);
+      videoElement.removeEventListener('canplay', onPlaying);
+      showVideo();
+    };
+    
+    videoElement.addEventListener('playing', onPlaying);
+    videoElement.addEventListener('canplay', onPlaying);
+    // запасной вариант: если видео уже готово
+    if (videoElement.readyState >= 2) {
+      onPlaying();
+    }
+    
+    const startPlay = () => {
+      videoElement.play().catch(e => warn('Video play failed:', e));
+    };
+    
+    // Запускаем воспроизведение
+    startPlay();
+    
     setupVideoLoop();
-    videoElement.play().catch(e => warn('Video play failed:', e));
     document.body.style.backgroundImage = 'none';
     document.body.classList.add('has-video-background');
     document.body.classList.remove('off-mode');
@@ -207,14 +261,7 @@ modules.wallpaper = (function() {
     } else if (mode === 'video') {
       const savedVideo = storage.load('wallpaperVideo');
       if (savedVideo) {
-        videoElement.src = savedVideo;
-        videoElement.style.display = 'block';
-        videoElement.loop = true;
-        setupVideoLoop();
-        videoElement.play().catch(e=>{});
-        document.body.classList.add('has-video-background');
-        document.body.style.backgroundImage = 'none';
-        document.body.classList.remove('off-mode');
+        setVideoBackground(savedVideo);
       } else { setCustomByIndex(0); }
     } else { setTimeout(() => setCustomByIndex(0), 100); }
   }
@@ -226,15 +273,7 @@ modules.wallpaper = (function() {
       else if (savedMode === 'custom') setCustomByIndex(storage.load('customWallpaperIndex') || 0);
       else if (savedMode === 'video') {
         const url = storage.load('wallpaperVideo');
-        if (url) {
-          videoElement.src = url;
-          videoElement.style.display = 'block';
-          videoElement.loop = true;
-          setupVideoLoop();
-          videoElement.play();
-          document.body.classList.add('has-video-background');
-          document.body.style.backgroundImage = 'none';
-        }
+        if (url) setVideoBackground(url);
       }
       document.body.classList.remove('off-mode');
     } else { setOff(); }

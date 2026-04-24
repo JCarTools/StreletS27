@@ -41,7 +41,7 @@ function initUI() {
   });
 
   document.getElementById('presetVideoKamin')?.addEventListener('click', () => {
-    modules.wallpaper.setVideoBackground('images/kamin HD.mp4');
+    modules.wallpaper.setVideoBackground('images/kaminHD.mp4');
     sidebar.classList.remove('open');
   });
 

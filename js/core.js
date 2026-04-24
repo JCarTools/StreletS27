@@ -4,6 +4,7 @@
  **********************************************/
 
 const TOKEN = window.ANDROID_TOKEN || "SECURE_TOKEN_2025";
+const IS_ANDROID = !!(window.androidApi && typeof window.androidApi === 'object');
 
 // Общее хранилище
 const storage = {
@@ -15,9 +16,13 @@ const storage = {
   }
 };
 
-// Android API
+// Android API с заглушками
 const android = {
   call(method, ...args) {
+    if (!IS_ANDROID) {
+      console.warn(`Android API call '${method}' ignored – no Android bridge`);
+      return null;
+    }
     if (window.androidApi && typeof window.androidApi[method] === 'function') {
       try { return window.androidApi[method](...args); } catch (e) { console.error(`Android API error [${method}]:`, e); }
     } else { console.warn(`Android API method not available: ${method}`); }
@@ -54,10 +59,11 @@ function showToast(message, duration = 3000) {
   setTimeout(() => toast.remove(), duration);
 }
 
-// Универсальное длинное нажатие с ripple
+// Универсальное длинное нажатие с ripple и защитой от последующего клика
 function makeLongPressable(element, callback, options = {}) {
   const { delay = 700, ripple = true, preventDefaultOnStart = false } = options;
   let pressTimer, longPressTriggered = false;
+  
   const addRipple = (e) => {
     if (!ripple) return;
     const rect = element.getBoundingClientRect();
@@ -71,12 +77,21 @@ function makeLongPressable(element, callback, options = {}) {
     element.appendChild(rippleEl);
     setTimeout(() => rippleEl.remove(), 500);
   };
+  
   const start = (e) => {
     longPressTriggered = false;
     clearTimeout(pressTimer);
     if (preventDefaultOnStart) e.preventDefault();
-    pressTimer = setTimeout(() => { longPressTriggered = true; addRipple(e); callback(element, e); }, delay);
+    pressTimer = setTimeout(() => { 
+      longPressTriggered = true; 
+      addRipple(e); 
+      callback(element, e);
+      // Отметка, что было длинное нажатие – блокируем ближайший click
+      element.setAttribute('data-long-pressed', 'true');
+      setTimeout(() => element.removeAttribute('data-long-pressed'), 300);
+    }, delay);
   };
+  
   const cancel = () => clearTimeout(pressTimer);
   const end = (e) => {
     clearTimeout(pressTimer);
@@ -85,6 +100,7 @@ function makeLongPressable(element, callback, options = {}) {
       longPressTriggered = false;
     }
   };
+  
   element.addEventListener('touchstart', start, { passive: !preventDefaultOnStart });
   element.addEventListener('touchend', end);
   element.addEventListener('touchcancel', cancel);

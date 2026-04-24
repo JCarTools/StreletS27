@@ -6,7 +6,7 @@ modules.clock = (function() {
   const flipClock = document.getElementById('flipClock');
   const dateDisplay = document.getElementById('dateDisplay');
   const weekdayDisplay = document.getElementById('weekdayDisplay');
-  let rafId = null;
+  let intervalId = null;
   let lastMinute = -1;
 
   const months = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
@@ -29,18 +29,18 @@ modules.clock = (function() {
         weekdayDisplay.textContent = weekdays[now.getDay()];
       }
     }
-    rafId = requestAnimationFrame(update);
   }
 
   function start() {
-    if (rafId) cancelAnimationFrame(rafId);
-    update();
+    stop();
+    update(); // сразу показать
+    intervalId = setInterval(update, 1000);
   }
 
   function stop() {
-    if (rafId) {
-      cancelAnimationFrame(rafId);
-      rafId = null;
+    if (intervalId) {
+      clearInterval(intervalId);
+      intervalId = null;
     }
   }
 

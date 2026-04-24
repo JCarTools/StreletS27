@@ -114,7 +114,7 @@ body.light .climate_slot.active {
 .climate-off-all svg { width: 0.9rem; height: 0.9rem; }
 .climate-off-all:hover { background: linear-gradient(180deg, rgba(36, 42, 53, 0.9), rgba(18, 22, 30, 0.76)); }
 
-/* === ВРЕМЯ (FLIP) – ПОЛНОСТЬЮ ВОССТАНОВЛЕНО === */
+/* === ВРЕМЯ (FLIP) === */
 .widget_time {
   width: var(--widget-size);
   display: flex; flex-direction: column; justify-content: center;
@@ -122,6 +122,7 @@ body.light .climate_slot.active {
   z-index: 20;
   cursor: pointer;
   flex-shrink: 0;
+  position: relative; /* для абсолютного позиционирования подписи */
 }
 .flip-clock { display: flex; justify-content: center; align-items: center; gap: 0.15rem; font-family: 'FlipClock', monospace; }
 .flip-digit {
@@ -143,6 +144,21 @@ body.light .climate_slot.active {
 .flip-separator { font-size: 2.8rem; color: #aaa; margin: 0 0.1rem; font-family: 'FlipClock', monospace; }
 .widget_time__date { margin-top: 0.2rem; font-size: 1rem; opacity: 0.9; }
 .widget_time__weekday { margin-top: 0.1rem; font-size: 0.9rem; opacity: 0.8; }
+
+/* Подпись @Strelets27 и версия */
+.widget_time__signature {
+  position: absolute;
+  bottom: 4px;
+  right: 8px;
+  font-size: 0.55rem;
+  opacity: 0.4;
+  color: inherit;
+  pointer-events: none;
+  white-space: nowrap;
+  font-family: monospace;
+  letter-spacing: 0.5px;
+  user-select: none;
+}
 
 body.light .flip-digit { background: #e0e0e0; color: #1a1c24; }
 body.light .flip-separator { color: #555; }
@@ -197,7 +213,6 @@ body.light .widget_player {
   flex-direction: column;
   gap: 0.32rem;
 }
-/* .widget_player__meta удалён */
 .widget_player__titles { min-width: 0; }
 .widget_player__title {
   font-size: 1.22rem;
@@ -232,6 +247,7 @@ body.light .widget_player__artist { color: rgba(66, 76, 97, 0.58); }
   flex: 1;
   border-radius: 999px;
   overflow: hidden;
+  cursor: pointer;
 }
 body.light .widget_player__track_line {
   background: linear-gradient(90deg, rgba(116, 130, 162, 0.16), rgba(149, 160, 186, 0.22));
@@ -332,42 +348,6 @@ body.light .widget_player__btn--primary {
   color: rgba(36, 50, 83, 0.94);
 }
 
-/* Регулировка громкости */
-.widget_player__volume {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-top: 0.2rem;
-}
-.volume-icon { flex-shrink: 0; }
-.volume-slider {
-  flex: 1;
-  height: 0.3rem;
-  -webkit-appearance: none;
-  appearance: none;
-  background: rgba(65, 71, 90, 0.7);
-  border-radius: 0.3rem;
-  outline: none;
-}
-.volume-slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 1rem;
-  height: 1rem;
-  border-radius: 50%;
-  background: #D9D9D9;
-  cursor: pointer;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.5);
-}
-.volume-slider::-moz-range-thumb {
-  width: 1rem;
-  height: 1rem;
-  border-radius: 50%;
-  background: #D9D9D9;
-  cursor: pointer;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.5);
-}
-
 /* === ПРИЛОЖЕНИЯ (2x2) === */
 .widget_apps {
   width: var(--widget-size);
@@ -419,7 +399,7 @@ body.light .app_slot {
 }
 .app_slot img { width: 2.18rem; height: 2.18rem; opacity: 0.92; position: relative; z-index: 1; }
 
-/* === ПРАВЫЕ КНОПКИ (OEM-СТИЛЬ С SVG-ИКОНКАМИ) === */
+/* === ПРАВЫЕ КНОПКИ === */
 .right-buttons {
   position: relative;
   display: flex;
@@ -507,7 +487,6 @@ body.light .widget_buttons {
   z-index: 1;
 }
 
-/* SVG-иконки в правых кнопках */
 .right-button__icon {
   position: relative;
   z-index: 3;
@@ -541,7 +520,6 @@ body.light .widget_buttons:hover {
   transition-duration: 0.1s;
 }
 
-/* Активная кнопка автообоев */
 #btnWallpaper.active {
   background: linear-gradient(145deg, rgba(70, 100, 150, 0.95), rgba(40, 60, 100, 0.8)) !important;
   border-color: rgba(180, 210, 255, 0.4);
@@ -569,7 +547,6 @@ body.light #btnWallpaper.active {
   }
 }
 
-/* OEM Touch Feedback */
 .widget_buttons.is-pressed {
   transform: scale(0.95);
   border-color: rgba(200, 220, 255, 0.3);

@@ -33,3 +33,27 @@
 }
 body.has-video-background #video-background { display: block; }
 body.has-video-background { background: black; }
+
+/* === ПОЛНОЕ СКРЫТИЕ НАТИВНЫХ КОНТРОЛОВ ВИДЕО НА ANDROID WEBVIEW === */
+video::-webkit-media-controls,
+video::-webkit-media-controls-enclosure,
+video::-webkit-media-controls-panel,
+video::-webkit-media-controls-play-button,
+video::-webkit-media-controls-start-playback-button,
+video::-internal-media-controls-download-button,
+video::-webkit-media-controls-overlay-play-button {
+  display: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+}
+
+/* Дополнительно скрываем плей-оверлей через псевдоэлементы */
+video::before,
+video::after {
+  display: none !important;
+}
+
+/* Плавное появление видео (opacity управляется из JS) */
+#video-background {
+  transition: opacity 0.6s ease;
+}

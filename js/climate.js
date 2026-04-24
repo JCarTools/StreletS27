@@ -18,7 +18,9 @@ modules.climate = (function() {
     { cmd: "voditel_seat_2", label: "Память\nводитель 2", max:1, icon:"icons/Driver.svg" },
     { cmd: "voditel_seat_3", label: "Память\nводитель 3", max:1, icon:"icons/Driver.svg" }
   ];
+  
   function formatLabel(cmd){ return cmd; }
+  
   async function loadCommands(){
     try{
       const list = JSON.parse(android.getRunEnum());
@@ -32,53 +34,110 @@ modules.climate = (function() {
         if (c === 'heat_rearwindow_on') base.off = 'heat_rearwindow_off';
         return base;
       });
-      for(let c of climateCommands){ try{ const p=android.getRunEnumPic(c.cmd); c.icon=p?`data:image/png;base64,${p}`:'icons/Default.svg'; }catch{ c.icon='icons/Default.svg'; } }
-    }catch{ climateCommands = fallback.map(c=>({...c})); }
+      for(let c of climateCommands){ 
+        try{ 
+          const p=android.getRunEnumPic(c.cmd); 
+          c.icon=p?`data:image/png;base64,${p}`:'icons/Default.svg'; 
+        }catch{ 
+          c.icon='icons/Default.svg'; 
+        } 
+      }
+    }catch{ 
+      climateCommands = fallback.map(c=>({...c})); 
+    }
   }
+  
   function getOff(cmd){ return cmd.off || `${cmd.cmd}_0`; }
+  
   function renderSlot(s){
     const id = s.dataset.climateSlot, saved = storage.load(`climate_slot_${id}`);
     s.innerHTML = "";
-    if(!saved){ s.innerHTML='<span style="font-size:1.5rem;opacity:0.5;">+</span>'; s.classList.remove('active'); return; }
-    const c = climateCommands.find(x=>x.cmd===saved); if(!c) return;
+    if(!saved){ 
+      s.innerHTML='<span style="font-size:1.5rem;opacity:0.5;">+</span>'; 
+      s.classList.remove('active'); 
+      return; 
+    }
+    const c = climateCommands.find(x=>x.cmd===saved); 
+    if(!c) return;
     const lvl = climateState[saved]||0, max=c.max||1;
     const dots = Array.from({length:max},(_,i)=>`<span class="climate-dot${i<lvl?' on':''}"></span>`).join('');
     s.innerHTML = `<img src="${c.icon}"><div class="climate-label">${c.label.replace(/\\n/g,'<br>')}</div><div class="climate-dots">${dots}</div>`;
     s.classList.toggle('active', lvl>0);
   }
-  function updateAll(){ document.querySelectorAll('.climate_slot').forEach(renderSlot); }
+  
+  function updateAll(){ 
+    document.querySelectorAll('.climate_slot').forEach(renderSlot); 
+  }
+  
   function turnOffAll(){
     for(let i=1;i<=6;i++){ 
-      const cmd=storage.load(`climate_slot_${i}`); if(!cmd) continue;
-      const c=climateCommands.find(x=>x.cmd===cmd); if(c){ android.runEnum(getOff(c)); climateState[cmd]=0; }
+      const cmd = storage.load(`climate_slot_${i}`); 
+      if(!cmd) continue;
+      const c = climateCommands.find(x=>x.cmd===cmd); 
+      if(c){ 
+        const offCmd = getOff(c);
+        if (typeof android.runEnum === 'function') android.runEnum(offCmd);
+        climateState[cmd] = 0; 
+      }
     }
     updateAll();
   }
+  
   function initPicker(){
     const picker=document.getElementById('climate-picker'), grid=document.getElementById('climate-picker-grid'), close=document.getElementById('climate-picker-close');
     let cur=null;
-    function open(id){ cur=id; grid.innerHTML='';
-      if(!climateCommands.length){ grid.innerHTML='<div style="grid-column:1/-1;padding:20px;">Нет функций</div>'; picker.classList.add('open'); return; }
-      climateCommands.forEach(cmd=>{ const d=document.createElement('div'); d.className='picker-item'; d.innerHTML=`<img src="${cmd.icon}"><span>${cmd.label.replace(/\\n/g,' ')}</span>`;
-        d.onclick=()=>{ storage.save(`climate_slot_${cur}`,cmd.cmd); climateState[cmd.cmd]=0; updateAll(); picker.classList.remove('open'); android.requestClimateStateForCommand(cmd.cmd); };
-        grid.appendChild(d); });
+    function open(id){ 
+      cur=id; 
+      grid.innerHTML='';
+      if(!climateCommands.length){ 
+        grid.innerHTML='<div style="grid-column:1/-1;padding:20px;">Нет функций</div>'; 
+        picker.classList.add('open'); 
+        return; 
+      }
+      climateCommands.forEach(cmd=>{ 
+        const d=document.createElement('div'); 
+        d.className='picker-item'; 
+        d.innerHTML=`<img src="${cmd.icon}"><span>${cmd.label.replace(/\\n/g,' ')}</span>`;
+        d.onclick=()=>{ 
+          storage.save(`climate_slot_${cur}`,cmd.cmd); 
+          climateState[cmd.cmd]=0; 
+          updateAll(); 
+          picker.classList.remove('open'); 
+          if (typeof android.requestClimateStateForCommand === 'function') android.requestClimateStateForCommand(cmd.cmd); 
+        };
+        grid.appendChild(d); 
+      });
       picker.classList.add('open');
     }
     close?.addEventListener('click',()=>picker.classList.remove('open'));
     picker.addEventListener('click',e=>{ if(e.target===picker) picker.classList.remove('open'); });
+    
     document.querySelectorAll('.climate_slot').forEach(s=>{
       const id=s.dataset.climateSlot;
       makeLongPressable(s,()=>open(id),{delay:700, preventDefaultOnStart: false});
       s.addEventListener('click',e=>{
-        const saved=storage.load(`climate_slot_${id}`); if(!saved){ open(id); return; }
-        const c=climateCommands.find(x=>x.cmd===saved); if(!c) return;
+        // защита от клика после длинного нажатия
+        if (s.getAttribute('data-long-pressed') === 'true') return;
+        const saved=storage.load(`climate_slot_${id}`); 
+        if(!saved){ open(id); return; }
+        const c=climateCommands.find(x=>x.cmd===saved); 
+        if(!c) return;
         const max=c.max||1, curLvl=climateState[saved]||0, next=(curLvl+1)%(max+1);
         climateState[saved]=next;
         const cmd = next===0 ? getOff(c) : (max>1?`${saved}_${next}`:saved);
-        android.runEnum(cmd); renderSlot(s);
+        if (typeof android.runEnum === 'function') android.runEnum(cmd);
+        renderSlot(s);
       });
     });
   }
-  async function init(){ await loadCommands(); initPicker(); updateAll(); document.getElementById('climateOffAll')?.addEventListener('click',turnOffAll); }
+  
+  async function init(){ 
+    await loadCommands(); 
+    initPicker(); 
+    updateAll(); 
+    const offAllBtn = document.getElementById('climateOffAll');
+    if (offAllBtn) offAllBtn.addEventListener('click', turnOffAll);
+  }
+  
   return { init, updateState: function(data){ updateAll(); } };
 })();

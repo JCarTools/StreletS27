@@ -100,9 +100,10 @@
     <div class="flip-clock" id="flipClock"></div>
     <div class="widget_time__date" id="dateDisplay"></div>
     <div class="widget_time__weekday" id="weekdayDisplay"></div>
+    <div class="widget_time__signature">@Strelets27 v.1.00</div>
   </div>
 
-  <!-- Плеер (без мета-заголовка "Сейчас играет") -->
+  <!-- Плеер (без громкости) -->
   <div class="widget_player widget">
     <div class="widget_player__image"><img src="images/img.jpg" alt=""></div>
     <div class="widget_player__right">
@@ -132,13 +133,6 @@
           <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M18 6v12M6 7l8 5-8 5V7z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
       </div>
-      <!-- Регулировка громкости -->
-      <div class="widget_player__volume">
-        <svg class="volume-icon" viewBox="0 0 24 24" width="18" height="18" fill="#D9D9D9">
-          <path d="M3 9v6h4l5 5V4L7 9H3z"/>
-        </svg>
-        <input type="range" id="volumeSlider" class="volume-slider" min="0" max="100" value="50" step="1">
-      </div>
     </div>
   </div>
 
@@ -150,7 +144,7 @@
     <div class="app_slot" data-slot="4"></div>
   </div>
 
-  <!-- Боковые кнопки (OEM-стиль с SVG-иконками) -->
+  <!-- Боковые кнопки -->
   <div class="right-buttons" aria-label="Быстрые действия">
     <div id="btnWallpaper" class="widget_buttons" title="Автосмена обоев">
       <span class="right-button__halo" aria-hidden="true"></span>
@@ -190,7 +184,7 @@
   <div id="app-picker-grid" class="picker-grid"></div>
 </div>
 
-<!-- Индикатор загрузки (глобальный) -->
+<!-- Индикатор загрузки -->
 <div id="global-loader" class="global-loader hidden">
   <div class="spinner"></div>
 </div>
@@ -198,7 +192,6 @@
 <!-- Видеофон -->
 <video id="video-background" muted loop playsinline></video>
 
-<!-- Подключение модулей JavaScript -->
 <script src="js/core.js"></script>
 <script src="js/wallpaper.js"></script>
 <script src="js/clock.js"></script>
