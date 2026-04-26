@@ -8,6 +8,23 @@ window.onAndroidEvent = function(type, data) {
   else if (type === "climateState") modules.climate.updateState(data);
 };
 
+// Функция для скрытия/показа виджетов (только в видео-режиме)
+function toggleWidgetsVisibility() {
+  if (modules.wallpaper.isVideoMode && modules.wallpaper.isVideoMode()) {
+    document.body.classList.toggle('widgets-hidden');
+  }
+}
+
+// Функция для смены обоев в статичном/авто-режиме
+function changeWallpaper() {
+  const mode = storage.load("wallpaperMode");
+  if (mode === "auto") {
+    modules.wallpaper.setAuto(true);
+  } else if (mode === "custom") {
+    modules.wallpaper.nextCustom();
+  }
+}
+
 function initUI() {
   modules.wallpaper.restore();
   modules.wallpaper.initAutoMode();
@@ -25,11 +42,17 @@ function initUI() {
   btnWallpaper?.addEventListener("click", () => { modules.wallpaper.toggleAutoMode(); });
   if (storage.load("wallpaperMode") === "auto") { btnWallpaper?.classList.add("active"); }
 
-  document.body.addEventListener("click", e => {
-    if (e.target === document.body) {
-      const mode = storage.load("wallpaperMode");
-      if (mode === "auto") modules.wallpaper.setAuto(true);
-      else if (mode === "custom") modules.wallpaper.nextCustom();
+  // Единый обработчик клика по body
+  document.body.addEventListener("click", (e) => {
+    // Если клик по интерактивным элементам дашборда – ничего не делаем
+    const dashboard = document.querySelector('.dashboard');
+    if (dashboard && dashboard.contains(e.target)) return;
+    
+    // Проверяем, активен ли видео-режим
+    if (modules.wallpaper.isVideoMode && modules.wallpaper.isVideoMode()) {
+      toggleWidgetsVisibility();
+    } else {
+      changeWallpaper();
     }
   });
 

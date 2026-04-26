@@ -589,3 +589,27 @@ body.light .widget_buttons.is-pressed {
   60% { transform: scale(1.05); }
   100% { transform: scale(1); }
 }
+/* Скрытие виджетов при клике (только в видео-режиме) */
+body.widgets-hidden .dashboard {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+body.widgets-hidden #btnNetwork,
+body.widgets-hidden #btnClose,
+body.widgets-hidden .brand-footer {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+/* Обратный переход */
+body:not(.widgets-hidden) .dashboard,
+body:not(.widgets-hidden) #btnNetwork,
+body:not(.widgets-hidden) #btnClose,
+body:not(.widgets-hidden) .brand-footer {
+  opacity: 1;
+  pointer-events: auto;
+  transition: opacity 0.3s ease;
+}

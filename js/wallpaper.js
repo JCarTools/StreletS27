@@ -1,6 +1,6 @@
 /**********************************************
  * Модуль: Обои (статические, авто, видео)
- * Исправлено: видео появляется только после реального старта воспроизведения
+ * Добавлено: скрытие/показ виджетов в режиме видео
  **********************************************/
 
 modules.wallpaper = (function() {
@@ -25,13 +25,12 @@ modules.wallpaper = (function() {
     videoElement.preload = 'auto';
     videoElement.controls = false;
     videoElement.disablePictureInPicture = true;
-    // Изначально скрыто и без прозрачности – появится только после playing
     videoElement.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; object-fit:cover; z-index:-1; pointer-events:none; display:none;';
     document.body.appendChild(videoElement);
   }
 
   let videoWatchdogInterval = null;
-  let videoReadyToShow = false;
+  let isVideoModeActive = false; // флаг активного видео-режима
 
   function stopWatchdog() { if (videoWatchdogInterval) { clearInterval(videoWatchdogInterval); videoWatchdogInterval = null; } }
   function startWatchdog() {
@@ -113,20 +112,21 @@ modules.wallpaper = (function() {
 
   function clearVideoBackground() {
     stopWatchdog();
+    isVideoModeActive = false;
     if (videoElement) {
       videoElement.pause();
       videoElement.src = '';
       videoElement.style.display = 'none';
       videoElement.style.opacity = '';
       videoElement.removeEventListener('ended', handleVideoEnded);
-      // удаляем временных слушателей
       const newVideo = videoElement.cloneNode(true);
       videoElement.parentNode.replaceChild(newVideo, videoElement);
       videoElement = newVideo;
-      // перепривязываем стили
       videoElement.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; object-fit:cover; z-index:-1; pointer-events:none; display:none;';
     }
     document.body.classList.remove('has-video-background');
+    // Убираем скрытие виджетов при выходе из видео-режима
+    document.body.classList.remove('widgets-hidden');
   }
 
   function setVideoBackground(fileOrUrl) {
@@ -146,7 +146,6 @@ modules.wallpaper = (function() {
     const showVideo = () => {
       videoElement.style.display = 'block';
       videoElement.style.opacity = '0';
-      // небольшая задержка для apply styles
       setTimeout(() => {
         videoElement.style.transition = 'opacity 0.6s ease';
         videoElement.style.opacity = '1';
@@ -156,12 +155,12 @@ modules.wallpaper = (function() {
     const onPlaying = () => {
       videoElement.removeEventListener('playing', onPlaying);
       videoElement.removeEventListener('canplay', onPlaying);
+      isVideoModeActive = true;
       showVideo();
     };
     
     videoElement.addEventListener('playing', onPlaying);
     videoElement.addEventListener('canplay', onPlaying);
-    // запасной вариант: если видео уже готово
     if (videoElement.readyState >= 2) {
       onPlaying();
     }
@@ -170,7 +169,6 @@ modules.wallpaper = (function() {
       videoElement.play().catch(e => warn('Video play failed:', e));
     };
     
-    // Запускаем воспроизведение
     startPlay();
     
     setupVideoLoop();
@@ -179,6 +177,11 @@ modules.wallpaper = (function() {
     document.body.classList.remove('off-mode');
     storage.save('wallpaperMode', 'video');
     storage.save('wallpaperVideo', url);
+  }
+
+  // Проверка, активен ли видео-режим
+  function isVideoMode() {
+    return isVideoModeActive;
   }
 
   async function setAuto(showLoader = true) {
@@ -291,5 +294,9 @@ modules.wallpaper = (function() {
 
   function initAutoMode() { if (storage.load('wallpaperMode') === 'auto') preloadNextWallpaper(); }
 
-  return { setOff, setAuto, setCustomByIndex, nextCustom, restore, toggleOffMode, toggleAutoMode, initAutoMode, setVideoBackground };
+  return { 
+    setOff, setAuto, setCustomByIndex, nextCustom, restore, 
+    toggleOffMode, toggleAutoMode, initAutoMode, setVideoBackground,
+    isVideoMode  // экспортируем метод проверки
+  };
 })();
