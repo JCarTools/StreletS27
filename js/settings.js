@@ -1,6 +1,5 @@
 /**********************************************
  * Модуль: Настройки приборной панели
- * Добавлен QR-код с увеличением при нажатии
  **********************************************/
 
 modules.settings = (function() {
@@ -46,7 +45,8 @@ modules.settings = (function() {
       title: 'Плеер',
       settings: [
         { id: 'playerVolumeStep', type: 'range', label: 'Шаг изменения громкости', min: 1, max: 20, step: 1, default: 5, unit: '%' },
-        { id: 'autoRequestMusicState', type: 'toggle', label: 'Автоматический запрос статуса', default: true }
+        { id: 'autoRequestMusicState', type: 'toggle', label: 'Автоматический запрос статуса', default: true },
+        { id: 'volumeSwipeEnabled', type: 'toggle', label: 'Горизонтальный свайп по экрану → регулировка звука', default: true }
       ]
     },
     apps: {
@@ -109,7 +109,7 @@ modules.settings = (function() {
     about: {
       title: 'О панели',
       settings: [
-        { id: 'version', type: 'info', label: 'Версия', value: '2.0' },
+        { id: 'version', type: 'info', label: 'Версия', value: '2.1' },
         { id: 'author', type: 'info', label: 'Автор', value: '@Strelets27' },
         { id: 'qrCode', type: 'qr' }
       ]
@@ -211,6 +211,10 @@ modules.settings = (function() {
         case 'autoRequestMusicState':
           storage.save('autoRequestMusicState', value);
           break;
+        case 'volumeSwipeEnabled':
+          storage.save('volumeSwipeEnabled', value);
+          updateVolumeSwipeEnabled(value);
+          break;
         case 'appsSlotsCount':
           storage.save('appsSlotsCount', value);
           updateAppsSlotsCount(parseInt(value));
@@ -241,6 +245,14 @@ modules.settings = (function() {
       }
     } finally {
       isApplyingSetting = false;
+    }
+  }
+  
+  function updateVolumeSwipeEnabled(enabled) {
+    console.log('[Settings] Горизонтальный свайп регулировка звука:', enabled ? 'Включен' : 'Выключен');
+    
+    if (modules.volumeSwipe && typeof modules.volumeSwipe.setEnabled === 'function') {
+      modules.volumeSwipe.setEnabled(enabled);
     }
   }
   
@@ -528,7 +540,7 @@ modules.settings = (function() {
     });
   }
   
-  // Стили для увеличенного QR-кода (добавляем в head, если ещё нет)
+  // Стили для увеличенного QR-кода
   function addQrModalStyles() {
     if (document.getElementById('qr-modal-styles')) return;
     const style = document.createElement('style');
@@ -596,11 +608,9 @@ modules.settings = (function() {
     document.head.appendChild(style);
   }
   
-  // Функция показа увеличенного QR-кода
   function showExpandedQr(qrImgSrc) {
     addQrModalStyles();
     
-    // Удаляем существующий оверлей, если есть
     const existingOverlay = document.querySelector('.qr-expanded-overlay');
     if (existingOverlay) existingOverlay.remove();
     
@@ -623,13 +633,11 @@ modules.settings = (function() {
     content.appendChild(text);
     overlay.appendChild(content);
     
-    // Закрытие по клику на фон
     overlay.addEventListener('click', () => {
       overlay.classList.remove('active');
       setTimeout(() => overlay.remove(), 300);
     });
     
-    // Закрытие по ESC
     const onEsc = (e) => {
       if (e.key === 'Escape') {
         overlay.classList.remove('active');
@@ -640,11 +648,9 @@ modules.settings = (function() {
     document.addEventListener('keydown', onEsc);
     
     document.body.appendChild(overlay);
-    // Активация анимации
     setTimeout(() => overlay.classList.add('active'), 10);
   }
   
-  // НОВАЯ ФУНКЦИЯ: создание QR-кода с возможностью увеличения
   function createQrCode(setting) {
     const container = document.createElement('div');
     container.className = 'settings-qr-container';
@@ -655,7 +661,6 @@ modules.settings = (function() {
     qrImg.alt = 'QR-код для поддержки автора';
     qrImg.style.cssText = 'width: 120px; height: 120px; border-radius: 0.75rem; border: 1px solid rgba(255,255,255,0.15); background: white; padding: 0.5rem; box-shadow: 0 4px 12px rgba(0,0,0,0.2); transition: transform 0.2s ease, box-shadow 0.2s ease; cursor: pointer;';
     
-    // Эффект при наведении/нажатии
     qrImg.addEventListener('mouseenter', () => {
       qrImg.style.transform = 'scale(1.02)';
       qrImg.style.boxShadow = '0 8px 20px rgba(0,0,0,0.3)';
@@ -665,7 +670,6 @@ modules.settings = (function() {
       qrImg.style.boxShadow = '0 4px 12px rgba(0,0,0,0.2)';
     });
     
-    // При клике - увеличиваем
     qrImg.addEventListener('click', (e) => {
       e.stopPropagation();
       showExpandedQr(qrImg.src);
@@ -680,7 +684,6 @@ modules.settings = (function() {
       showExpandedQr(qrImg.src);
     });
     
-    // Адаптация для светлой темы
     if (document.body.classList.contains('light')) {
       qrImg.style.borderColor = 'rgba(0,0,0,0.1)';
       qrText.style.color = 'rgba(50,60,80,0.75)';
@@ -691,7 +694,6 @@ modules.settings = (function() {
     return container;
   }
   
-  // Функции создания элементов управления
   function createRangeInput(setting, currentValue) {
     const container = document.createElement('div');
     container.className = 'settings-range-container';
@@ -997,8 +999,9 @@ modules.settings = (function() {
   }
   
   function init() {
-    console.log('[Settings] init()');
+    console.log('[Settings] init() - поиск кнопки настроек');
     
+    // Применяем настройки
     applySetting('widgetSize', loadSetting('widgetSize') || 13.5);
     applySetting('widgetOpacity', loadSetting('widgetOpacity') || 1);
     applySetting('widgetBlur', loadSetting('widgetBlur') || 10);
@@ -1013,6 +1016,7 @@ modules.settings = (function() {
     applySetting('wallpaperServers', loadSetting('wallpaperServers') || ['picsum_proxy', 'picsum']);
     applySetting('playerVolumeStep', loadSetting('playerVolumeStep') || 5);
     applySetting('autoRequestMusicState', loadSetting('autoRequestMusicState') !== false);
+    applySetting('volumeSwipeEnabled', loadSetting('volumeSwipeEnabled') !== false);
     applySetting('appsSlotsCount', loadSetting('appsSlotsCount') || '4');
     applySetting('showAppLabels', loadSetting('showAppLabels') || false);
     applySetting('showFooterText', loadSetting('showFooterText') !== false);
@@ -1022,27 +1026,70 @@ modules.settings = (function() {
     applySetting('offModeHidePlayer', loadSetting('offModeHidePlayer') !== false);
     applySetting('offModeHideRightButtons', loadSetting('offModeHideRightButtons') !== false);
     
+    // Находим кнопку настроек
     const settingsBtn = document.getElementById('btnSettings');
+    console.log('[Settings] btnSettings найден:', settingsBtn);
+    
     if (settingsBtn) {
-      if (settingsBtn._clickHandler) {
-        settingsBtn.removeEventListener('click', settingsBtn._clickHandler);
+      // Удаляем старые обработчики
+      const oldClickHandler = settingsBtn._clickHandler;
+      if (oldClickHandler) {
+        settingsBtn.removeEventListener('click', oldClickHandler);
       }
+      
+      // Создаём новый обработчик
       const clickHandler = (e) => {
         e.stopPropagation();
         e.preventDefault();
-        console.log('[Settings] Кнопка настроек нажата');
+        console.log('[Settings] Кнопка настроек НАЖАТА!');
         open();
       };
+      
       settingsBtn._clickHandler = clickHandler;
       settingsBtn.addEventListener('click', clickHandler);
       
+      // Добавляем обработчик touchstart для мобильных устройств
+      settingsBtn.addEventListener('touchstart', (e) => {
+        e.stopPropagation();
+        console.log('[Settings] touchstart на кнопке настроек');
+      });
+      
+      // Применяем OEM touch feedback
       if (typeof attachOemTouchFeedback === 'function') {
         attachOemTouchFeedback(settingsBtn);
       }
       
-      console.log('[Settings] Обработчик на кнопку настроек установлен');
+      console.log('[Settings] Обработчик на кнопку настроек УСТАНОВЛЕН');
+      
+      // Проверяем, что кнопка не перекрыта другим элементом
+      const rect = settingsBtn.getBoundingClientRect();
+      console.log('[Settings] Позиция кнопки:', rect);
+      
+      // Проверяем z-index и pointer-events
+      const computedStyle = window.getComputedStyle(settingsBtn);
+      console.log('[Settings] z-index:', computedStyle.zIndex);
+      console.log('[Settings] pointer-events:', computedStyle.pointerEvents);
+      console.log('[Settings] opacity:', computedStyle.opacity);
+      
     } else {
-      console.error('[Settings] btnSettings не найдена в DOM');
+      console.error('[Settings] btnSettings НЕ НАЙДЕНА в DOM!');
+      
+      // Повторный поиск через таймаут (если DOM ещё не полностью загружен)
+      setTimeout(() => {
+        const retryBtn = document.getElementById('btnSettings');
+        if (retryBtn) {
+          console.log('[Settings] Повторный поиск - кнопка найдена!');
+          const clickHandler = (e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            console.log('[Settings] Кнопка настроек НАЖАТА (повторная инициализация)!');
+            open();
+          };
+          retryBtn.addEventListener('click', clickHandler);
+        } else {
+          console.error('[Settings] Повторный поиск - кнопка НЕ НАЙДЕНА');
+        }
+      }, 500);
     }
   }
   

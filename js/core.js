@@ -49,12 +49,16 @@ const android = {
   // ДИАГНОСТИРОВАННЫЕ МЕТОДЫ ГРОМКОСТИ
   getVolume() {
     if (!IS_ANDROID) return 50;
-    const vol = this.call('getvol', TOKEN);
-    console.log(`[ANDROID] getvol вернул: ${vol}`);
-    if (vol !== null && vol !== undefined && typeof vol === 'number' && vol >= 0 && vol <= 100) {
-      return parseInt(vol);
+    const raw = this.call('getvol', TOKEN);
+    console.log('[ANDROID] getvol ->', raw, '(тип:', typeof raw, ')');
+    // parseInt терпит и число 48, и строку "48".
+    // Старый `typeof vol === 'number'` молча отдавал 50, если натив
+    // возвращал строку.
+    const vol = parseInt(raw, 10);
+    if (!isNaN(vol) && vol >= 0 && vol <= 100) {
+      return vol;
     }
-    console.warn('[ANDROID] getVolume вернул некорректное значение:', vol);
+    console.warn('[ANDROID] getVolume: некорректное значение:', raw);
     return 50;
   },
   setVolume(volume) {

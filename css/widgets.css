@@ -389,12 +389,14 @@ body.light .widget_player__track_time {
   color: rgba(66, 76, 97, 0.58);
 }
 
+/* КНОПКИ УПРАВЛЕНИЯ ПО ЦЕНТРУ */
 .widget_player__buttons {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 0.72rem;
-  margin-top: 0.12rem;
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
   position: relative;
 }
 .widget_player__btn {
@@ -451,13 +453,9 @@ body.light .widget_player__btn--primary {
   color: rgba(36, 50, 83, 0.94);
 }
 
-/* === СЛАЙДЕР ГРОМКОСТИ С ПЕРЕТАСКИВАНИЕМ === */
+/* === СЛАЙДЕР ГРОМКОСТИ ВСТРОЕННЫЙ В ПЛЕЕР === */
 .widget_player__volume_slider {
-  position: absolute;
-  bottom: 100%;
-  left: 0;
-  right: 0;
-  margin-bottom: 0.5rem;
+  width: 100%;
   background: linear-gradient(180deg, rgba(24, 27, 34, 0.92), rgba(16, 19, 25, 0.86));
   backdrop-filter: blur(12px);
   border-radius: 1rem;
@@ -467,17 +465,11 @@ body.light .widget_player__btn--primary {
   gap: 0.8rem;
   border: 1px solid rgba(255,255,255,0.08);
   box-shadow: 0 8px 20px rgba(0,0,0,0.2);
-  opacity: 0;
-  visibility: hidden;
-  transition: opacity 0.2s ease, visibility 0.2s ease;
-  z-index: 100;
-  cursor: pointer;
-  touch-action: none;
-}
-
-.widget_player__volume_slider.visible {
   opacity: 1;
   visibility: visible;
+  cursor: pointer;
+  touch-action: none;
+  margin-top: 0.3rem;
 }
 
 .widget_player__volume_line {

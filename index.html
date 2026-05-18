@@ -12,6 +12,7 @@
 <link rel="stylesheet" href="css/ripple.css">
 <link rel="stylesheet" href="css/custom.css">
 <link rel="stylesheet" href="css/settings.css">
+<link rel="stylesheet" href="css/volume-swipe.css">
 
 <!-- Стиль для скрытия контента до загрузки -->
 <style>
@@ -166,56 +167,50 @@
       <div class="flip-clock" id="flipClock"></div>
       <div class="widget_time__date" id="dateDisplay"></div>
       <div class="widget_time__weekday" id="weekdayDisplay"></div>
-      <div class="widget_time__signature">@Strelets27 v.2.0</div>
+      <div class="widget_time__signature">@Strelets27 v.2.1</div>
     </div>
 
     <!-- Плеер (с громкостью) -->
-    <div class="widget_player widget">
-      <div class="widget_player__image"><img src="images/img.jpg" alt="Обложка"></div>
-      <div class="widget_player__right">
-        <div class="widget_player__top">
-          <div class="widget_player__titles">
-            <div class="widget_player__title">Название песни</div>
-            <div class="widget_player__artist">Имя артиста</div>
-          </div>
-        </div>
-        <div class="widget_player__track_row">
-          <div class="widget_player__track_line">
-            <div class="widget_player__track_progress" style="width:0%"><div class="widget_player__track_dot"></div></div>
-          </div>
-          <div class="widget_player__track_time"><span>00:00</span> / <span>00:00</span></div>
-        </div>
-        <div class="widget_player__buttons" aria-label="Управление воспроизведением">
-          <button id="player__prev" class="widget_player__prev widget_player__btn" type="button" aria-label="Назад">
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 6v12M18 7l-8 5 8 5V7z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          </button>
-          <button id="player__play" class="widget_player__play widget_player__btn widget_player__btn--primary" type="button" aria-label="Воспроизвести">
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 7.5v9l7-4.5-7-4.5z" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          </button>
-          <button id="player__pause" class="widget_player__play widget_player__btn widget_player__btn--primary" type="button" aria-label="Пауза" style="display:none">
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9.5 7.5v9M14.5 7.5v9" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>
-          </button>
-          <button id="player__next" class="widget_player__next widget_player__btn" type="button" aria-label="Вперёд">
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M18 6v12M6 7l8 5-8 5V7z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          </button>
-          <button id="player__volume" class="widget_player__volume widget_player__btn" type="button" aria-label="Громкость">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-              <path d="M3 9v6h4l5 5V4L7 9H3zm10-3v12c2.21 0 4-2.69 4-6s-1.79-6-4-6zm4-2v16c3.87 0 7-4.04 7-8s-3.13-8-7-8z"/>
-            </svg>
-          </button>
-        </div>
-        <div class="widget_player__volume_slider" id="player__volume_slider">
-          <div class="widget_player__volume_line">
-            <div class="widget_player__volume_fill" id="player__volume_fill" style="width: 50%">
-              <div class="widget_player__volume_dot"></div>
-            </div>
-          </div>
-          <span class="widget_player__volume_value" id="player__volume_value">50%</span>
-        </div>
+<div class="widget_player widget">
+  <div class="widget_player__image"><img src="images/img.jpg" alt="Обложка"></div>
+  <div class="widget_player__right">
+    <div class="widget_player__top">
+      <div class="widget_player__titles">
+        <div class="widget_player__title">Название песни</div>
+        <div class="widget_player__artist">Имя артиста</div>
       </div>
     </div>
+    <div class="widget_player__track_row">
+      <div class="widget_player__track_line">
+        <div class="widget_player__track_progress" style="width:0%"><div class="widget_player__track_dot"></div></div>
+      </div>
+      <div class="widget_player__track_time"><span>00:00</span> / <span>00:00</span></div>
+    </div>
+    <div class="widget_player__buttons" aria-label="Управление воспроизведением">
+      <button id="player__prev" class="widget_player__prev widget_player__btn" type="button" aria-label="Назад">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 6v12M18 7l-8 5 8 5V7z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <button id="player__play" class="widget_player__play widget_player__btn widget_player__btn--primary" type="button" aria-label="Воспроизвести">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 7.5v9l7-4.5-7-4.5z" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <button id="player__pause" class="widget_player__play widget_player__btn widget_player__btn--primary" type="button" aria-label="Пауза" style="display:none">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9.5 7.5v9M14.5 7.5v9" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>
+      </button>
+      <button id="player__next" class="widget_player__next widget_player__btn" type="button" aria-label="Вперёд">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M18 6v12M6 7l8 5-8 5V7z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    </div>
+    <div class="widget_player__volume_slider" id="player__volume_slider">
+      <div class="widget_player__volume_line">
+        <div class="widget_player__volume_fill" id="player__volume_fill" style="width: 50%">
+          <div class="widget_player__volume_dot"></div>
+        </div>
+      </div>
+      <span class="widget_player__volume_value" id="player__volume_value">50%</span>
+    </div>
+  </div>
+</div>
 
-<!-- Приложения -->
 <!-- Приложения -->
 <div class="widget_apps widget" data-count="4">
   <div class="app_slot" data-slot="1"></div>
@@ -287,6 +282,7 @@
 <script src="js/apps.js"></script>
 <script src="js/carData.js"></script>
 <script src="js/settings.js"></script>
+<script src="js/volume-swipe.js"></script>
 <!-- И в конце main.js -->
 <script src="js/main.js"></script>
 

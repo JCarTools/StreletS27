@@ -140,6 +140,7 @@ function initUI() {
   if (modules.settings) modules.settings.init();
   if (modules.carData) modules.carData.init();
   if (modules.volume) modules.volume.init();
+  if (modules.volumeSwipe) modules.volumeSwipe.init();
 
   document.getElementById("btnClose")?.addEventListener("click", (e) => {
     e.stopPropagation();
