@@ -1,6 +1,5 @@
 /**********************************************
- * Модуль: Плеер (управление, прогресс)
- * Логика: оптимистичный UI + синхронизация с Android
+ * Модуль: Плеер (исправленный слайдер громкости)
  **********************************************/
 
 modules.player = (function() {
@@ -15,17 +14,19 @@ modules.player = (function() {
   const playBtn = document.getElementById("player__play");
   const pauseBtn = document.getElementById("player__pause");
   const trackLine = document.querySelector(".widget_player__track_line");
+  const volumeBtn = document.getElementById("player__volume");
+  const volumeSlider = document.getElementById("player__volume_slider");
+  const volumeFill = document.getElementById("player__volume_fill");
+  const volumeValue = document.getElementById("player__volume_value");
   
-  // Состояние плеера
-  let isPlaying = true;              // предполагаем, что музыка уже играет
-  let trackDuration = 0;             // длительность в мс
-  let trackPosition = 0;             // текущая позиция в мс
-  let positionTimestamp = 0;         // время последнего обновления позиции (Date.now())
+  // Состояние
+  let isPlaying = true;
+  let trackDuration = 0;
+  let trackPosition = 0;
+  let positionTimestamp = 0;
   let progressTimer = null;
-  let pendingPlayState = null;       // ожидаемое состояние после нажатия
-  let pendingTimer = null;
+  let currentVolume = 50;
   
-  // Форматирование времени
   function formatTime(ms) {
     if (ms === Infinity || ms > 86400000) return "∞";
     const m = Math.floor(ms / 60000);
@@ -33,7 +34,6 @@ modules.player = (function() {
     return m + ":" + String(s).padStart(2, '0');
   }
   
-  // Обновление прогресс-бара и времени
   function updateProgressUI(pos, dur) {
     const percent = dur > 0 ? Math.min(pos / dur * 100, 100) : 0;
     if (progressFill) progressFill.style.width = percent + "%";
@@ -41,7 +41,6 @@ modules.player = (function() {
     if (timeDurationSpan) timeDurationSpan.textContent = formatTime(dur);
   }
   
-  // Запуск таймера прогресса (только когда играет)
   function startProgressTick() {
     if (progressTimer) clearInterval(progressTimer);
     if (!isPlaying) return;
@@ -61,7 +60,6 @@ modules.player = (function() {
     }
   }
   
-  // Применение состояния воспроизведения (UI + таймер)
   function applyPlayState(playing) {
     if (playing === isPlaying) return;
     isPlaying = playing;
@@ -69,33 +67,16 @@ modules.player = (function() {
       playBtn.style.display = isPlaying ? "none" : "flex";
       pauseBtn.style.display = isPlaying ? "flex" : "none";
     }
-    if (isPlaying) {
-      startProgressTick();
-    } else {
-      stopProgressTick();
-    }
+    if (isPlaying) startProgressTick();
+    else stopProgressTick();
   }
   
-  // Оптимистичное изменение UI при нажатии кнопки
-  function optimisticSetPlaying(playing) {
-    if (pendingTimer) clearTimeout(pendingTimer);
-    pendingPlayState = playing;
-    applyPlayState(playing);
-    pendingTimer = setTimeout(() => {
-      pendingPlayState = null;
-      pendingTimer = null;
-    }, 5000);
-  }
-  
-  // Обработчик нажатия Play/Pause
   function onPlayPauseClick() {
     const cmd = isPlaying ? "MEDIA_PAUSE" : "MEDIA_PLAY";
-    const expected = !isPlaying;
     if (typeof android.runEnum === 'function') android.runEnum(cmd);
-    optimisticSetPlaying(expected);
+    applyPlayState(!isPlaying);
   }
   
-  // Обработчик клика по прогресс-бару (перемотка)
   function onProgressClick(e) {
     if (trackDuration <= 0) return;
     let clientX;
@@ -110,21 +91,138 @@ modules.player = (function() {
     percent = Math.min(1, Math.max(0, percent));
     const newPos = Math.floor(percent * trackDuration);
     if (typeof android.runEnum === 'function') android.runEnum("MEDIA_SEEK_" + newPos);
-    // Оптимистично обновляем позицию
     trackPosition = newPos;
     positionTimestamp = Date.now();
     updateProgressUI(newPos, trackDuration);
   }
   
-  // Обработчик событий от Android (musicInfo)
+  // === ГРОМКОСТЬ ===
+  function updateVolumeUI(percent) {
+    percent = Math.min(100, Math.max(0, percent));
+    if (volumeFill) volumeFill.style.width = percent + "%";
+    if (volumeValue) volumeValue.textContent = percent + "%";
+    currentVolume = percent;
+  }
+  
+  function setVolume(volume) {
+    let vol = Math.min(100, Math.max(0, parseInt(volume)));
+    if (isNaN(vol)) return;
+    if (vol === currentVolume) return;
+    
+    android.setVolume(vol);
+    updateVolumeUI(vol);
+  }
+  
+  function onVolumeLineClick(e) {
+    e.stopPropagation();
+    e.preventDefault();
+    
+    let clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    if (clientX === undefined) return;
+    
+    const volumeLine = volumeSlider.querySelector('.widget_player__volume_line');
+    if (!volumeLine) return;
+    
+    const rect = volumeLine.getBoundingClientRect();
+    if (rect.width <= 0) return;
+    
+    let percent = (clientX - rect.left) / rect.width;
+    percent = Math.min(1, Math.max(0, percent));
+    const newVolume = Math.round(percent * 100);
+    setVolume(newVolume);
+  }
+  
+  function initVolumeSliderDrag(volumeLine) {
+    const volumeDot = volumeSlider.querySelector('.widget_player__volume_dot');
+    if (!volumeDot) return;
+    
+    let isDragging = false;
+    
+    const startDrag = (e) => {
+      e.preventDefault();
+      isDragging = true;
+      let clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      if (clientX !== undefined) {
+        const rect = volumeLine.getBoundingClientRect();
+        let percent = (clientX - rect.left) / rect.width;
+        percent = Math.min(1, Math.max(0, percent));
+        setVolume(Math.round(percent * 100));
+      }
+    };
+    
+    const onDrag = (e) => {
+      if (!isDragging) return;
+      e.preventDefault();
+      let clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      if (clientX !== undefined) {
+        const rect = volumeLine.getBoundingClientRect();
+        let percent = (clientX - rect.left) / rect.width;
+        percent = Math.min(1, Math.max(0, percent));
+        setVolume(Math.round(percent * 100));
+      }
+    };
+    
+    const stopDrag = () => { isDragging = false; };
+    
+    volumeDot.addEventListener('mousedown', startDrag);
+    volumeDot.addEventListener('touchstart', startDrag, { passive: false });
+    window.addEventListener('mousemove', onDrag);
+    window.addEventListener('mouseup', stopDrag);
+    volumeDot.addEventListener('touchmove', onDrag, { passive: false });
+    volumeDot.addEventListener('touchend', stopDrag);
+  }
+  
+  function initVolumeSlider() {
+    if (!volumeSlider || !volumeBtn) return;
+    
+    // Кнопка открытия слайдера
+    volumeBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      volumeSlider.classList.toggle('visible');
+    });
+    
+    const volumeLine = volumeSlider.querySelector('.widget_player__volume_line');
+    if (!volumeLine) return;
+    
+    volumeLine.addEventListener('click', onVolumeLineClick);
+    volumeLine.addEventListener('touchstart', onVolumeLineClick, { passive: false });
+    initVolumeSliderDrag(volumeLine);
+    
+    document.addEventListener('click', function hideSlider(e) {
+      if (!volumeSlider) return;
+      if (!volumeSlider.contains(e.target) && e.target !== volumeBtn) {
+        volumeSlider.classList.remove('visible');
+      }
+    });
+    
+    // Начальная громкость
+    let sysVolume = 50;
+    try {
+      if (modules.volume && typeof modules.volume.getVolume === 'function') {
+        sysVolume = modules.volume.getVolume();
+      } else {
+        sysVolume = android.getVolume();
+      }
+    } catch(e) {}
+    updateVolumeUI(sysVolume);
+  }
+  
+  function handleVolumeFromSystem(volume) {
+    if (volume !== undefined && volume !== null) {
+      const vol = parseInt(volume);
+      if (!isNaN(vol) && vol >= 0 && vol <= 100 && vol !== currentVolume) {
+        updateVolumeUI(vol);
+      }
+    }
+  }
+  
   function updateMusicInfo(data) {
     if (typeof data === "string") data = JSON.parse(data);
-    
     if (titleEl) titleEl.textContent = data.SongName || "—";
     if (artistEl) artistEl.textContent = data.SongArtist || "";
     if (imgEl && data.SongAlbumPicture) imgEl.src = "data:image/png;base64," + data.SongAlbumPicture;
     
-    // Длительность и позиция (могут приходить в секундах или миллисекундах)
     let dur = parseFloat(data.Trdur) || 0;
     let pos = parseFloat(data.Trpos) || 0;
     if (dur < 1000 && dur > 0) dur *= 1000;
@@ -134,23 +232,10 @@ modules.player = (function() {
     positionTimestamp = Date.now();
     updateProgressUI(trackPosition, trackDuration);
     
-    // Статус воспроизведения
-    let newPlaying = null;
-    if (typeof data.IsPlaying === 'boolean') newPlaying = data.IsPlaying;
-    else if (typeof data.playState === 'boolean') newPlaying = data.playState;
-    else if (typeof data.playStat === 'boolean') newPlaying = data.playStat;
-    
-    if (newPlaying !== null) {
-      // Если ожидаем подтверждение и состояние совпало – сбрасываем ожидание
-      if (pendingPlayState !== null && newPlaying === pendingPlayState) {
-        pendingPlayState = null;
-        if (pendingTimer) clearTimeout(pendingTimer);
-        pendingTimer = null;
-      }
+    let newPlaying = data.IsPlaying === true || data.playState === true || data.playStat === true;
+    if (newPlaying !== undefined) {
       applyPlayState(newPlaying);
     }
-    
-    // Перезапускаем таймер прогресса (на случай, если позиция обновилась)
     if (isPlaying) {
       stopProgressTick();
       startProgressTick();
@@ -158,35 +243,21 @@ modules.player = (function() {
   }
   
   function init() {
-    // Навигация
-    document.getElementById("player__prev")?.addEventListener("click", () => {
-      if (typeof android.runEnum === 'function') android.runEnum("MEDIA_BLACK");
-    });
-    document.getElementById("player__next")?.addEventListener("click", () => {
-      if (typeof android.runEnum === 'function') android.runEnum("MEDIA_NEXT");
-    });
-    
-    // Play / Pause
+    document.getElementById("player__prev")?.addEventListener("click", () => android.runEnum("MEDIA_BLACK"));
+    document.getElementById("player__next")?.addEventListener("click", () => android.runEnum("MEDIA_NEXT"));
     if (playBtn) playBtn.addEventListener("click", onPlayPauseClick);
     if (pauseBtn) pauseBtn.addEventListener("click", onPlayPauseClick);
-    
-    // Прогресс-бар
     if (trackLine) {
       trackLine.addEventListener("click", onProgressClick);
       trackLine.addEventListener("touchstart", onProgressClick);
     }
-    
-    // Начальное состояние – играет (кнопка паузы видна)
-    applyPlayState(true);
-    
-    // Запрашиваем текущее состояние у Android
-    if (typeof android.requestMusicState === 'function') {
-      android.requestMusicState();
-    } else {
-      // fallback: команда, которая может инициировать ответ
-      if (typeof android.runEnum === 'function') android.runEnum("MEDIA_GET_STATUS");
+    initVolumeSlider();
+    if (modules.volume && modules.volume.subscribe) {
+      modules.volume.subscribe(handleVolumeFromSystem);
     }
+    applyPlayState(true);
+    android.requestMusicState();
   }
   
-  return { updateMusicInfo, init };
+  return { updateMusicInfo, init, handleVolumeFromSystem };
 })();

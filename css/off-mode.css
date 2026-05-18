@@ -12,40 +12,12 @@ body.off-mode .brand-footer {
   pointer-events: none;
 }
 
-body.off-mode .widget_climate {
-  animation: slideInFromLeft 3.12s ease-out forwards;
-  opacity: 1;
-  pointer-events: auto;
+/* Класс для выборочного скрытия элементов (управляется через настройки) */
+body.off-mode .off-mode-hidden {
+  display: none !important;
 }
 
-body.off-mode .widget_apps {
-  animation: slideInFromRight 3.12s ease-out forwards;
-  opacity: 1;
-  pointer-events: auto;
-}
-
-body.off-mode .right-buttons {
-  animation: slideInFromRight 3.12s ease-out 0.39s forwards;
-  opacity: 1;
-  pointer-events: auto;
-}
-
-body.off-mode .widget_player {
-  animation: slideInFromLeft 3.12s ease-out 0.78s forwards;
-  opacity: 1;
-  pointer-events: auto;
-}
-
-@keyframes slideInFromLeft {
-  0% { opacity: 0; transform: translateX(-150px); }
-  100% { opacity: 1; transform: translateX(0); }
-}
-@keyframes slideInFromRight {
-  0% { opacity: 0; transform: translateX(150px); }
-  100% { opacity: 1; transform: translateX(0); }
-}
-
-/* Часы в off-режиме – луна в центре, без подписи */
+/* Часы в off-режиме – луна в центре, без подписи, видны всегда */
 body.off-mode .widget_time {
   position: fixed;
   top: 35%;
@@ -53,10 +25,14 @@ body.off-mode .widget_time {
   transform: translate(-50%, -50%);
   width: auto;
   height: auto;
+  min-width: auto;
+  max-width: none;
   background: transparent !important;
   backdrop-filter: none;
   box-shadow: none;
+  border: none !important;
   padding: 0;
+  margin: 0;
   z-index: 100;
   opacity: 1;
   pointer-events: auto;
@@ -65,6 +41,17 @@ body.off-mode .widget_time {
   user-select: none;
   -webkit-user-select: none;
   -webkit-tap-highlight-color: transparent;
+  overflow: visible;
+  visibility: visible !important;
+}
+
+/* Убираем все возможные фоны и ободки у часов и их элементов */
+body.off-mode .widget_time::before,
+body.off-mode .widget_time::after {
+  display: none !important;
+  background: transparent !important;
+  border: none !important;
+  opacity: 0 !important;
 }
 
 /* Скрываем подпись в off-режиме */
@@ -72,21 +59,93 @@ body.off-mode .widget_time__signature {
   display: none;
 }
 
-body.off-mode .flip-digit,
-body.off-mode .flip-digit::selection,
-body.off-mode .flip-digit::-moz-selection {
-  background: rgba(20, 20, 30, 0.4) !important;
-  color: rgba(200, 200, 200, 0.5) !important;
-  -webkit-tap-highlight-color: transparent;
-  user-select: none;
+/* Контейнер для цифр часов - убираем ограничения */
+body.off-mode .flip-clock {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: clamp(0.15rem, 0.8vw, 0.4rem);
+  width: auto;
+  min-width: auto;
+  overflow: visible;
+  white-space: nowrap;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0;
+  margin: 0;
 }
 
-body.off-mode .flip-clock,
-body.off-mode .flip-clock * {
-  user-select: none;
-  -webkit-user-select: none;
+/* Отдельная цифра - убираем все ограничения ширины и фоны */
+body.off-mode .flip-digit {
+  position: relative;
+  background: rgba(20, 20, 30, 0.4);
+  color: rgba(200, 200, 200, 0.5);
+  font-size: clamp(3rem, 10vw, 8rem) !important;
+  font-weight: bold;
+  padding: 0.15rem 0.35rem;
+  border-radius: 0.8rem;
+  box-shadow: inset 0 -0.25rem 0 rgba(0,0,0,0.3), inset 0 0.25rem 0 rgba(255,255,255,0.05), 0 0.25rem 0.6rem rgba(0,0,0,0.2);
+  text-shadow: 0 0 15px rgba(200,200,200,0.3);
+  min-width: auto;
+  width: auto;
+  display: inline-block;
+  text-align: center;
+  backdrop-filter: blur(2px);
+  transition: all 0.5s ease;
+  line-height: 1;
+  flex-shrink: 0;
+  border: none !important;
 }
 
+body.off-mode .flip-digit::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 2px;
+  background: rgba(0,0,0,0.5);
+  box-shadow: 0 0 6px rgba(0,0,0,0.5);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+body.off-mode .flip-separator {
+  font-size: clamp(3rem, 10vw, 8rem) !important;
+  color: rgba(200,200,200,0.4);
+  display: inline-block;
+  margin: 0 0.1rem;
+  line-height: 1;
+  flex-shrink: 0;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* Скрываем дату и день недели в off-режиме */
+body.off-mode .widget_time__date,
+body.off-mode .widget_time__weekday { 
+  display: none; 
+}
+
+/* Анимация свечения */
+body.off-mode .widget_time.glowing .flip-digit {
+  animation: timeGlow 3s infinite alternate;
+}
+
+@keyframes timeGlow {
+  from {
+    text-shadow: 0 0 15px rgba(200,200,200,0.3);
+    box-shadow: inset 0 -0.25rem 0 rgba(0,0,0,0.3), inset 0 0.25rem 0 rgba(255,255,255,0.05), 0 0.25rem 0.6rem rgba(0,0,0,0.2);
+  }
+  to {
+    text-shadow: 0 0 30px rgba(255,255,200,0.5);
+    box-shadow: inset 0 -0.25rem 0 rgba(0,0,0,0.3), inset 0 0.25rem 0 rgba(255,255,255,0.08), 0 0 8px rgba(255,255,200,0.2);
+  }
+}
+
+/* Анимация появления луны */
 @keyframes moonRise {
   0% {
     top: calc(100% - var(--dashboard-bottom) - var(--widget-size) / 2);
@@ -155,6 +214,7 @@ body:not(.off-mode) .widget_time {
   opacity: 1;
   animation: none;
   visibility: visible;
+  border: 1px solid var(--oem-border-soft);
 }
 
 /* Показываем подпись в обычном режиме */
@@ -162,44 +222,7 @@ body:not(.off-mode) .widget_time__signature {
   display: block;
 }
 
-body.off-mode .flip-clock { gap: clamp(0.2rem, 1vw, 0.5rem); }
-body.off-mode .flip-digit {
-  background: rgba(20, 20, 30, 0.4); color: rgba(200, 200, 200, 0.5);
-  font-size: clamp(4rem, 12vw, 15rem);
-  padding: clamp(0.2rem, 0.5vw, 0.5rem);
-  border-radius: 1rem;
-  box-shadow: inset 0 -0.3rem 0 rgba(0,0,0,0.3), inset 0 0.3rem 0 rgba(255,255,255,0.05), 0 0.3rem 0.6rem rgba(0,0,0,0.2);
-  text-shadow: 0 0 15px rgba(200,200,200,0.3);
-  min-width: auto;
-  backdrop-filter: blur(2px);
-  transition: all 0.5s ease;
-}
-body.off-mode .flip-digit::after {
-  height: 3px;
-  background: rgba(0,0,0,0.5);
-  box-shadow: 0 0 8px rgba(0,0,0,0.7);
-}
-body.off-mode .flip-separator {
-  font-size: clamp(4rem, 12vw, 15rem);
-  color: rgba(200,200,200,0.4);
-}
-body.off-mode .widget_time__date,
-body.off-mode .widget_time__weekday { display: none; }
-
-body.off-mode .widget_time.glowing .flip-digit {
-  animation: timeGlow 3s infinite alternate;
-}
-@keyframes timeGlow {
-  from {
-    text-shadow: 0 0 15px rgba(200,200,200,0.3);
-    box-shadow: inset 0 -0.3rem 0 rgba(0,0,0,0.3), inset 0 0.3rem 0 rgba(255,255,255,0.05), 0 0.3rem 0.6rem rgba(0,0,0,0.2);
-  }
-  to {
-    text-shadow: 0 0 40px rgba(255,255,200,0.6);
-    box-shadow: inset 0 -0.3rem 0 rgba(0,0,0,0.3), inset 0 0.3rem 0 rgba(255,255,255,0.1), 0 0 8px rgba(255,255,200,0.3);
-  }
-}
-
+/* Стили для обычного режима (не off-mode) */
 body:not(.off-mode) .widget_climate,
 body:not(.off-mode) .widget_apps,
 body:not(.off-mode) .right-buttons,
@@ -214,7 +237,15 @@ body:not(.off-mode) .brand-footer .char {
   animation: none;
   opacity: 1;
 }
+
 body:not(.off-mode)::before {
   opacity: 0;
   transition: opacity 3.12s ease;
+}
+
+/* Восстанавливаем dashboard при выходе из off-mode */
+body:not(.off-mode) .dashboard {
+  opacity: 1;
+  pointer-events: auto;
+  visibility: visible;
 }

@@ -1,13 +1,6 @@
 {
   "id": "my_dashboard",
   "name": "Моя приборная панель",
-  "version": "1.0",
+  "version": "2.0",
   "entry": "index.html"
 }
-"icons": [
-  {
-    "src": "TeneT-T8_1_0b.png",
-    "sizes": "512x512",
-    "type": "image/png"
-  }
-]

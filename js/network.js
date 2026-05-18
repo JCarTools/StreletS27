@@ -43,6 +43,7 @@ modules.draggableNetwork = (function() {
     btn.addEventListener('touchend', onEnd); btn.addEventListener('touchcancel', onEnd);
     btn.addEventListener('mousedown', onStart);
     window.addEventListener('mousemove', onMove); window.addEventListener('mouseup', onEnd);
+    btn.addEventListener('click', (e) => e.stopPropagation());
   }
   return { init };
 })();
@@ -63,15 +64,15 @@ modules.network = (function() {
   function check() {
     if (checking) return;
     checking = true;
-    const img = new Image();
-    const t = setTimeout(() => { img.src = ''; setStatus(false); checking = false; }, 5000);
-    img.onload = () => { clearTimeout(t); setStatus(true); checking = false; };
-    img.onerror = () => { clearTimeout(t); setStatus(false); checking = false; };
-    img.src = 'https://yandex.ru/favicon.ico?_=' + Date.now();
+    // Используем надежный метод fetch с no-cors
+    fetch('https://clients3.google.com/generate_204', { mode: 'no-cors', cache: 'no-store' })
+      .then(() => { setStatus(true); checking = false; })
+      .catch(() => { setStatus(false); checking = false; });
+    setTimeout(() => { if (checking) { setStatus(false); checking = false; } }, 5000);
   }
   function init() {
     check();
-    btn.addEventListener('click', () => { if (!checking) check(); });
+    btn.addEventListener('click', (e) => { e.stopPropagation(); if (!checking) check(); });
     window.addEventListener('online', () => { setStatus(true); check(); });
     window.addEventListener('offline', () => setStatus(false));
     checkInterval = setInterval(check, 120000);

@@ -20,6 +20,7 @@
   --bg-widget: rgba(29, 27, 32, 0.7);
   --bg-slot: rgba(42, 39, 48, 0.7);
   --color-text: #D9D9D9;
+  --widget-opacity: 1; /* Добавлена переменная для прозрачности виджетов */
   /* OEM additions */
   --oem-panel: linear-gradient(180deg, rgba(20, 23, 30, 0.82), rgba(12, 14, 20, 0.66));
   --oem-panel-light: linear-gradient(180deg, rgba(251, 252, 255, 0.78), rgba(234, 238, 246, 0.56));

@@ -9,17 +9,21 @@
   transition: all 0.5s;
   border: 1px solid var(--oem-border-soft);
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), var(--oem-shadow-soft);
+  opacity: var(--widget-opacity, 1);
 }
 body.light .widget { background: rgba(211, 212, 221, 0.7); }
 
-/* === КЛИМАТ (2x3) === */
+/* === КЛИМАТ (2x3) - КВАДРАТНЫЕ КНОПКИ === */
 .widget_climate_2x3 {
-  width: calc(var(--widget-size) * 1.5 + var(--widget-gap));
+  width: calc(var(--widget-size) * 2.2 + var(--widget-gap));
   position: relative;
   background: linear-gradient(180deg, rgba(20, 23, 30, 0.76), rgba(12, 15, 20, 0.6));
   border-color: rgba(255,255,255,0.05);
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.045), 0 14px 28px rgba(0,0,0,0.16);
   flex-shrink: 0;
+  transition: width 0.3s ease;
+  padding: 0.8rem;
+  opacity: var(--widget-opacity, 1);
 }
 body.light .widget_climate_2x3 {
   background: linear-gradient(180deg, rgba(250, 252, 255, 0.72), rgba(234, 239, 246, 0.54));
@@ -28,22 +32,30 @@ body.light .widget_climate_2x3 {
 
 .climate-grid_2x3 {
   display: grid;
-  grid-template: repeat(2, 1fr) / repeat(3, 1fr);
-  gap: 0.375rem;
+  grid-template-rows: repeat(2, 1fr);
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.55rem;
   height: 100%;
+  width: 100%;
 }
 
 .climate_slot {
-  background: linear-gradient(180deg, rgba(39, 45, 57, 0.44), rgba(22, 27, 35, 0.28));
-  border: 1px solid rgba(255,255,255,0.06);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), inset 0 -7px 16px rgba(0,0,0,0.1);
-  border-radius: 1rem;
-  display: flex; flex-direction: column;
-  align-items: center; justify-content: center;
-  cursor: pointer; transition: transform 0.18s ease, background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
-  user-select: none;
-  -webkit-user-select: none;
-  -webkit-touch-callout: none;
+  background: linear-gradient(180deg, rgba(42, 47, 59, 0.44), rgba(23, 27, 35, 0.3));
+  border: 1px solid rgba(255,255,255,0.05);
+  backdrop-filter: blur(8px);
+  border-radius: 1.05rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.18s ease, background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), inset 0 -6px 14px rgba(0,0,0,0.1);
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  position: relative;
+  opacity: var(--widget-opacity, 1);
 }
 body.light .climate_slot {
   background: linear-gradient(180deg, rgba(255,255,255,0.72), rgba(234, 239, 246, 0.5));
@@ -53,30 +65,42 @@ body.light .climate_slot {
 .climate_slot::before {
   content: '';
   position: absolute;
-  inset: 0.35rem;
-  border-radius: 0.78rem;
-  background: radial-gradient(circle at 50% 28%, rgba(178,198,236,0.11), transparent 68%);
+  inset: 0.38rem;
+  border-radius: 0.82rem;
+  background: radial-gradient(circle at 50% 28%, rgba(178, 198, 236, 0.08), transparent 68%);
   pointer-events: none;
 }
 .climate_slot:hover {
-  background: linear-gradient(180deg, rgba(49, 56, 69, 0.52), rgba(24, 29, 38, 0.34));
-  border-color: rgba(255,255,255,0.08);
+  background: linear-gradient(180deg, rgba(50, 57, 71, 0.52), rgba(25, 30, 39, 0.34));
+  border-color: rgba(255,255,255,0.075);
   transform: translateY(-1px);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 10px 18px rgba(0,0,0,0.12);
 }
-.climate_slot img { width: 1.75rem; height: 1.75rem; opacity: 0.92; filter: invert(1); }
+.climate_slot img {
+  width: 2.2rem;
+  height: 2.2rem;
+  object-fit: contain;
+  margin-bottom: 0.3rem;
+  flex-shrink: 0;
+}
 body.light .climate_slot img { filter: none; opacity: 0.8; }
 
 .climate-label {
-  position: relative;
-  z-index: 1;
-  margin-top: 0.22rem;
-  font-size: 0.56rem;
-  line-height: 1.1;
-  letter-spacing: 0.03em;
-  color: rgba(231, 236, 244, 0.64);
+  font-size: 0.58rem;
+  line-height: 1.2;
+  letter-spacing: 0.02em;
+  color: rgba(231, 236, 244, 0.7);
   text-align: center;
+  width: 100%;
+  white-space: normal;
+  word-break: break-word;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  padding: 0 0.2rem;
 }
-body.light .climate-label { color: rgba(50, 60, 80, 0.62); }
+body.light .climate-label { color: rgba(50, 60, 80, 0.65); }
 
 .climate_slot.active {
   background: linear-gradient(180deg, rgba(62, 91, 144, 0.82), rgba(32, 48, 79, 0.76));
@@ -89,18 +113,31 @@ body.light .climate_slot.active {
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.78), 0 12px 24px rgba(104,128,175,0.16);
 }
 
-.climate-dots { display: flex; gap: 0.15rem; margin-top: 0.1rem; position: relative; z-index: 1; }
-.climate-dot { width: 0.28rem; height: 0.28rem; border-radius: 50%; background: rgba(255,255,255,0.24); }
-.climate-dot.on { background: rgba(244,248,255,0.96); box-shadow: 0 0 5px rgba(203,219,255,0.45); }
+.climate-dots {
+  display: flex;
+  gap: 0.15rem;
+  margin-top: 0.2rem;
+  justify-content: center;
+}
+.climate-dot {
+  width: 0.3rem;
+  height: 0.3rem;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.35);
+}
+.climate-dot.on {
+  background: rgba(244,248,255,0.96);
+  box-shadow: 0 0 5px rgba(203,219,255,0.45);
+}
 
 .climate-off-all {
   position: absolute;
   top: 50%;
   left: 33.33%;
   transform: translate(-50%, -50%);
-  width: 2.15rem;
-  height: 2.15rem;
-  border-radius: 0.96rem;
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 1rem;
   border: 1px solid rgba(255,255,255,0.08);
   background: linear-gradient(180deg, rgba(28, 33, 42, 0.82), rgba(14, 18, 25, 0.7));
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 12px 24px rgba(0,0,0,0.18);
@@ -109,47 +146,80 @@ body.light .climate_slot.active {
   justify-content: center;
   cursor: pointer;
   z-index: 5;
-  transition: background 0.2s;
+  transition: background 0.2s, left 0.3s ease;
+  opacity: var(--widget-opacity, 1);
 }
-.climate-off-all svg { width: 0.9rem; height: 0.9rem; }
+.climate-off-all svg { width: 1rem; height: 1rem; }
 .climate-off-all:hover { background: linear-gradient(180deg, rgba(36, 42, 53, 0.9), rgba(18, 22, 30, 0.76)); }
 
 /* === ВРЕМЯ (FLIP) === */
 .widget_time {
   width: var(--widget-size);
-  display: flex; flex-direction: column; justify-content: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
   text-align: center;
   z-index: 20;
   cursor: pointer;
   flex-shrink: 0;
-  position: relative; /* для абсолютного позиционирования подписи */
+  position: relative;
+  opacity: var(--widget-opacity, 1);
 }
 
-.flip-clock { display: flex; justify-content: center; align-items: center; gap: 0.15rem; font-family: 'FlipClock', monospace; }
+.flip-clock {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.15rem;
+  font-family: 'FlipClock', monospace;
+}
 
 .flip-digit {
   position: relative;
-  background: #1a1c24; color: #e0e0e0;
-  font-size: 2.8rem; font-weight: bold;
-  padding: 0.15rem 0.25rem; border-radius: 0.5rem;
+  background: #1a1c24;
+  color: #e0e0e0;
+  font-size: 2.8rem;
+  font-weight: bold;
+  padding: 0.15rem 0.25rem;
+  border-radius: 0.5rem;
   box-shadow: inset 0 -0.2rem 0 rgba(0,0,0,0.5), inset 0 0.2rem 0 rgba(255,255,255,0.1), 0 0.2rem 0.4rem rgba(0,0,0,0.3);
   text-shadow: 0 0 5px rgba(255,255,255,0.3);
-  min-width: 1.8rem; text-align: center;
-  font-family: 'FlipClock', monospace; overflow: hidden;
+  min-width: 1.8rem;
+  text-align: center;
+  font-family: 'FlipClock', monospace;
+  overflow: hidden;
 }
 .flip-digit::after {
-  content: ''; position: absolute; left: 0; right: 0; top: 50%;
-  height: 2px; background: rgba(0,0,0,0.6);
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 2px;
+  background: rgba(0,0,0,0.6);
   box-shadow: 0 0 3px rgba(0,0,0,0.5);
-  transform: translateY(-50%); pointer-events: none;
+  transform: translateY(-50%);
+  pointer-events: none;
 }
 
-.flip-separator { font-size: 2.8rem; color: #aaa; margin: 0 0.1rem; font-family: 'FlipClock', monospace; }
+.flip-separator {
+  font-size: 2.8rem;
+  color: #aaa;
+  margin: 0 0.1rem;
+  font-family: 'FlipClock', monospace;
+}
 
-.widget_time__date { margin-top: 0.2rem; font-size: 1rem; opacity: 0.9; }
-.widget_time__weekday { margin-top: 0.1rem; font-size: 0.9rem; opacity: 0.8; }
+.widget_time__date {
+  margin-top: 0.2rem;
+  font-size: 1rem;
+  opacity: 0.9;
+}
+.widget_time__weekday {
+  margin-top: 0.1rem;
+  font-size: 0.9rem;
+  opacity: 0.8;
+}
 
-/* Подпись @Strelets27 и версия – по центру внизу */
 .widget_time__signature {
   position: absolute;
   bottom: 6px;
@@ -166,19 +236,26 @@ body.light .climate_slot.active {
   white-space: nowrap;
 }
 
-body.light .flip-digit { background: #e0e0e0; color: #1a1c24; }
-body.light .flip-separator { color: #555; }
+body.light .flip-digit {
+  background: #e0e0e0;
+  color: #1a1c24;
+}
+body.light .flip-separator {
+  color: #555;
+}
 
 /* === ПЛЕЕР (ГИБКАЯ ШИРИНА) === */
 .widget_player {
   flex: 1 1 auto;
-  display: flex; gap: 0.8rem;
+  display: flex;
+  gap: 0.8rem;
   padding: 0.92rem 1rem;
   min-width: 0;
   background: linear-gradient(180deg, rgba(22, 25, 32, 0.76), rgba(15, 18, 24, 0.62));
   border: 1px solid rgba(255,255,255,0.055);
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.045), 0 16px 32px rgba(0,0,0,0.14);
   position: relative;
+  opacity: var(--widget-opacity, 1);
 }
 body.light .widget_player {
   background: linear-gradient(180deg, rgba(248, 250, 255, 0.74), rgba(232, 236, 244, 0.56));
@@ -194,9 +271,12 @@ body.light .widget_player {
   pointer-events: none;
 }
 .widget_player__image {
-  width: 6.5rem; height: 6.5rem;
-  border-radius: 1.15rem; overflow: hidden;
-  align-self: center; flex-shrink: 0;
+  width: 6.5rem;
+  height: 6.5rem;
+  border-radius: 1.15rem;
+  overflow: hidden;
+  align-self: center;
+  flex-shrink: 0;
   position: relative;
   box-shadow: 0 10px 24px rgba(0,0,0,0.26), inset 0 1px 0 rgba(255,255,255,0.08);
 }
@@ -207,9 +287,15 @@ body.light .widget_player {
   background: linear-gradient(180deg, rgba(255,255,255,0.1), transparent 36%, rgba(0,0,0,0.16));
   pointer-events: none;
 }
-.widget_player__image img { width: 100%; height: 100%; object-fit: cover; }
+.widget_player__image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
 .widget_player__right {
-  flex: 1; display: flex; flex-direction: column;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
   justify-content: center;
   min-width: 0;
   gap: 0.3rem;
@@ -219,7 +305,9 @@ body.light .widget_player {
   flex-direction: column;
   gap: 0.32rem;
 }
-.widget_player__titles { min-width: 0; }
+.widget_player__titles {
+  min-width: 0;
+}
 .widget_player__title {
   font-size: 1.22rem;
   line-height: 1.14;
@@ -229,7 +317,9 @@ body.light .widget_player {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-body.light .widget_player__title { color: rgba(28, 35, 48, 0.92); }
+body.light .widget_player__title {
+  color: rgba(28, 35, 48, 0.92);
+}
 .widget_player__artist {
   margin-top: 0.16rem;
   font-size: 0.9rem;
@@ -238,7 +328,9 @@ body.light .widget_player__title { color: rgba(28, 35, 48, 0.92); }
   overflow: hidden;
   text-overflow: ellipsis;
 }
-body.light .widget_player__artist { color: rgba(66, 76, 97, 0.58); }
+body.light .widget_player__artist {
+  color: rgba(66, 76, 97, 0.58);
+}
 
 .widget_player__track_row {
   display: flex;
@@ -293,15 +385,17 @@ body.light .widget_player__track_dot {
   color: rgba(212, 219, 229, 0.58);
   font-variant-numeric: tabular-nums;
 }
-body.light .widget_player__track_time { color: rgba(66, 76, 97, 0.58); }
+body.light .widget_player__track_time {
+  color: rgba(66, 76, 97, 0.58);
+}
 
-/* Кнопки плеера */
 .widget_player__buttons {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 0.72rem;
   margin-top: 0.12rem;
+  position: relative;
 }
 .widget_player__btn {
   position: relative;
@@ -318,13 +412,16 @@ body.light .widget_player__track_time { color: rgba(66, 76, 97, 0.58); }
   cursor: pointer;
   transition: transform 0.2s ease, background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, color 0.2s ease;
   -webkit-tap-highlight-color: transparent;
+  opacity: var(--widget-opacity, 1);
 }
 .widget_player__btn:hover {
   transform: translateY(-1px);
   background: linear-gradient(180deg, rgba(50, 58, 73, 0.76), rgba(24, 29, 38, 0.58));
   border-color: rgba(255,255,255,0.085);
 }
-.widget_player__btn:active { transform: scale(0.985); }
+.widget_player__btn:active {
+  transform: scale(0.985);
+}
 .widget_player__btn--primary {
   width: 3rem;
   height: 3rem;
@@ -354,23 +451,139 @@ body.light .widget_player__btn--primary {
   color: rgba(36, 50, 83, 0.94);
 }
 
-/* === ПРИЛОЖЕНИЯ (2x2) === */
+/* === СЛАЙДЕР ГРОМКОСТИ С ПЕРЕТАСКИВАНИЕМ === */
+.widget_player__volume_slider {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+  margin-bottom: 0.5rem;
+  background: linear-gradient(180deg, rgba(24, 27, 34, 0.92), rgba(16, 19, 25, 0.86));
+  backdrop-filter: blur(12px);
+  border-radius: 1rem;
+  padding: 0.6rem 0.8rem;
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  border: 1px solid rgba(255,255,255,0.08);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s ease, visibility 0.2s ease;
+  z-index: 100;
+  cursor: pointer;
+  touch-action: none;
+}
+
+.widget_player__volume_slider.visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+.widget_player__volume_line {
+  position: relative;
+  flex: 1;
+  height: 0.3rem;
+  background: linear-gradient(90deg, rgba(88, 96, 115, 0.4), rgba(65, 71, 90, 0.6));
+  border-radius: 999px;
+  overflow: visible;
+  cursor: pointer;
+  touch-action: none;
+}
+
+.widget_player__volume_fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  background: linear-gradient(90deg, rgba(100, 150, 255, 0.9), rgba(70, 110, 200, 0.85));
+  border-radius: inherit;
+  box-shadow: 0 0 8px rgba(100, 150, 255, 0.4);
+}
+
+.widget_player__volume_dot {
+  position: absolute;
+  right: -0.35rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 0.9rem;
+  height: 0.9rem;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.3), 0 0 0 2px rgba(100, 150, 255, 0.3);
+  cursor: grab;
+  touch-action: none;
+  transition: transform 0.1s ease;
+}
+
+.widget_player__volume_dot:active {
+  cursor: grabbing;
+  transform: translateY(-50%) scale(1.2);
+}
+
+.widget_player__volume_value {
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: rgba(212, 219, 229, 0.8);
+  min-width: 3rem;
+  text-align: right;
+  font-family: monospace;
+  user-select: none;
+}
+
+body.light .widget_player__volume_slider {
+  background: linear-gradient(180deg, rgba(240, 243, 250, 0.92), rgba(225, 230, 240, 0.86));
+  border-color: rgba(88, 102, 134, 0.12);
+}
+
+body.light .widget_player__volume_line {
+  background: linear-gradient(90deg, rgba(116, 130, 162, 0.2), rgba(149, 160, 186, 0.3));
+}
+
+body.light .widget_player__volume_fill {
+  background: linear-gradient(90deg, rgba(70, 110, 200, 0.85), rgba(50, 80, 150, 0.8));
+}
+
+body.light .widget_player__volume_value {
+  color: rgba(66, 76, 97, 0.7);
+}
+
+/* === ПРИЛОЖЕНИЯ - КВАДРАТНЫЕ КНОПКИ === */
 .widget_apps {
-  width: var(--widget-size);
-  display: grid;
-  grid-template: repeat(2, 1fr) / repeat(2, 1fr);
-  gap: 0.55rem;
-  padding: 0.58rem;
   background: linear-gradient(180deg, rgba(21, 24, 31, 0.74), rgba(14, 16, 22, 0.62));
   border: 1px solid rgba(255,255,255,0.05);
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 14px 28px rgba(0,0,0,0.12);
   flex-shrink: 0;
+  opacity: var(--widget-opacity, 1);
+  border-radius: 1.5rem;
+  transition: width 0.3s ease, min-width 0.3s ease;
 }
 body.light .widget_apps {
   background: linear-gradient(180deg, rgba(251, 252, 255, 0.72), rgba(235, 238, 245, 0.5));
   border-color: rgba(83, 94, 125, 0.09);
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.68), 0 12px 22px rgba(93, 110, 141, 0.1);
 }
+
+/* Для 2 слотов - вертикальное расположение (flex column), ширина = половина стандартного виджета */
+.widget_apps[data-count="2"] {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Для 4 слотов - сетка 2x2, ширина = стандартная */
+.widget_apps[data-count="4"] {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  grid-template-rows: repeat(2, 1fr);
+}
+
+/* Для 6 слотов - сетка 3x2, ширина = стандартная * 1.5 */
+.widget_apps[data-count="6"] {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(2, 1fr);
+}
+
 .app_slot {
   position: relative;
   background: linear-gradient(180deg, rgba(42, 47, 59, 0.44), rgba(23, 27, 35, 0.3));
@@ -378,11 +591,15 @@ body.light .widget_apps {
   backdrop-filter: blur(8px);
   border-radius: 1.05rem;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   transition: transform 0.18s ease, background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), inset 0 -6px 14px rgba(0,0,0,0.1);
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  opacity: var(--widget-opacity, 1);
 }
 body.light .app_slot {
   background: linear-gradient(180deg, rgba(255,255,255,0.72), rgba(234, 239, 246, 0.5));
@@ -403,7 +620,33 @@ body.light .app_slot {
   transform: translateY(-1px);
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 10px 18px rgba(0,0,0,0.12);
 }
-.app_slot img { width: 2.18rem; height: 2.18rem; opacity: 0.92; position: relative; z-index: 1; }
+.app_slot img {
+  width: 2.18rem;
+  height: 2.18rem;
+  opacity: 0.92;
+  position: relative;
+  z-index: 1;
+}
+
+/* Названия приложений (опционально) */
+.app-label {
+  font-size: 0.55rem;
+  margin-top: 0.25rem;
+  color: rgba(231, 236, 244, 0.7);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  padding: 0 0.2rem;
+  display: none;
+}
+body.light .app-label {
+  color: rgba(50, 60, 80, 0.65);
+}
+.app_slot.has-label .app-label {
+  display: block;
+}
 
 /* === ПРАВЫЕ КНОПКИ (OEM-СТИЛЬ С SVG-ИКОНКАМИ) === */
 .right-buttons {
@@ -464,6 +707,7 @@ body.light .right-buttons {
   will-change: transform, box-shadow, filter;
   -webkit-tap-highlight-color: transparent;
   backdrop-filter: blur(10px);
+  opacity: var(--widget-opacity, 1);
 }
 body.light .widget_buttons {
   background: linear-gradient(145deg, rgba(255, 255, 255, 0.9), rgba(240, 245, 255, 0.7));
@@ -493,7 +737,6 @@ body.light .widget_buttons {
   z-index: 1;
 }
 
-/* SVG-иконки в правых кнопках */
 .right-button__icon {
   position: relative;
   z-index: 3;
@@ -527,7 +770,6 @@ body.light .widget_buttons:hover {
   transition-duration: 0.1s;
 }
 
-/* Активная кнопка автообоев */
 #btnWallpaper.active {
   background: linear-gradient(145deg, rgba(70, 100, 150, 0.95), rgba(40, 60, 100, 0.8)) !important;
   border-color: rgba(180, 210, 255, 0.4);
@@ -545,17 +787,16 @@ body.light #btnWallpaper.active {
 }
 
 @keyframes smartWallpaperBreath {
-  0%, 100% { 
-    transform: translateY(0) scale(1); 
+  0%, 100% {
+    transform: translateY(0) scale(1);
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15), inset 0 -6px 12px rgba(0, 0, 0, 0.3), 0 0 0 2px rgba(100, 150, 255, 0.2), 0 12px 28px rgba(30, 50, 90, 0.4);
   }
-  50% { 
-    transform: translateY(-2px) scale(1.02); 
+  50% {
+    transform: translateY(-2px) scale(1.02);
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), inset 0 -6px 12px rgba(0, 0, 0, 0.35), 0 0 0 3px rgba(100, 150, 255, 0.25), 0 16px 32px rgba(30, 50, 90, 0.5);
   }
 }
 
-/* OEM Touch Feedback */
 .widget_buttons.is-pressed {
   transform: scale(0.95);
   border-color: rgba(200, 220, 255, 0.3);
@@ -589,6 +830,7 @@ body.light .widget_buttons.is-pressed {
   60% { transform: scale(1.05); }
   100% { transform: scale(1); }
 }
+
 /* Скрытие виджетов при клике (только в видео-режиме) */
 body.widgets-hidden .dashboard {
   opacity: 0;
@@ -604,7 +846,6 @@ body.widgets-hidden .brand-footer {
   transition: opacity 0.3s ease;
 }
 
-/* Обратный переход */
 body:not(.widgets-hidden) .dashboard,
 body:not(.widgets-hidden) #btnNetwork,
 body:not(.widgets-hidden) #btnClose,

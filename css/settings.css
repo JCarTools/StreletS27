@@ -1,0 +1,435 @@
+/* settings.css - Модальное окно настроек в стиле виджетов */
+
+.settings-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.settings-modal-overlay.open {
+  opacity: 1;
+}
+
+/* Основное окно настроек — как виджет */
+.settings-modal-content {
+  position: relative;
+  width: min(80vw, 800px);
+  max-width: 800px;
+  height: auto;
+  max-height: 85vh;
+  background: var(--bg-widget, rgba(29, 27, 32, 0.7));
+  backdrop-filter: blur(20px);
+  border-radius: 1.5rem;
+  border: 1px solid var(--oem-border-soft, rgba(255, 255, 255, 0.08));
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: settingsSlideIn 0.3s ease-out;
+}
+
+/* Светлая тема */
+body.light .settings-modal-content {
+  background: rgba(235, 238, 245, 0.85);
+  backdrop-filter: blur(20px);
+  border-color: rgba(83, 94, 125, 0.12);
+}
+
+@keyframes settingsSlideIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* Заголовок как у виджетов */
+.settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
+}
+
+.settings-header h2 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  color: rgba(255, 255, 255, 0.92);
+  margin: 0;
+}
+
+body.light .settings-header h2 {
+  color: rgba(28, 35, 48, 0.92);
+}
+
+/* Кнопка закрытия — как у шторок */
+.settings-close-btn {
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 0.9rem;
+  background: linear-gradient(180deg, rgba(40, 46, 58, 0.6), rgba(19, 22, 30, 0.36));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.settings-close-btn svg {
+  width: 1rem;
+  height: 1rem;
+  color: rgba(238, 242, 247, 0.86);
+}
+
+.settings-close-btn:hover {
+  background: linear-gradient(180deg, rgba(50, 58, 73, 0.76), rgba(24, 29, 38, 0.58));
+  transform: scale(1.02);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.settings-close-btn:active {
+  transform: scale(0.98);
+}
+
+body.light .settings-close-btn {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(232, 237, 245, 0.58));
+  border-color: rgba(86, 97, 124, 0.11);
+}
+
+body.light .settings-close-btn svg {
+  color: rgba(44, 53, 73, 0.82);
+}
+
+/* Тело настроек с прокруткой */
+.settings-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem 1.25rem;
+  scrollbar-width: thin;
+}
+
+.settings-body::-webkit-scrollbar {
+  width: 4px;
+}
+
+.settings-body::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+}
+
+.settings-body::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 10px;
+}
+
+.settings-body::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Секция настроек — как группа слотов */
+.settings-section {
+  margin-bottom: 1.5rem;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 1rem;
+  padding: 0.5rem 0;
+  border: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+body.light .settings-section {
+  background: rgba(0, 0, 0, 0.03);
+  border-color: rgba(0, 0, 0, 0.04);
+}
+
+.settings-section-title {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: rgba(255, 255, 255, 0.45);
+  padding: 0.5rem 1rem 0.25rem;
+  margin: 0;
+}
+
+body.light .settings-section-title {
+  color: rgba(50, 60, 80, 0.55);
+}
+
+/* Строка настройки — как слайдер в плеере */
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.7rem 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.settings-row:last-child {
+  border-bottom: none;
+}
+
+.settings-label {
+  font-size: 0.85rem;
+  font-weight: 450;
+  color: rgba(231, 236, 244, 0.8);
+}
+
+body.light .settings-label {
+  color: rgba(50, 60, 80, 0.78);
+}
+
+/* Range slider — как у трека плеера */
+.settings-range-container {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  min-width: 180px;
+}
+
+.settings-range {
+  flex: 1;
+  height: 3px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+  outline: none;
+  cursor: pointer;
+}
+
+.settings-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.9);
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+  border: none;
+  transition: transform 0.1s ease;
+}
+
+.settings-range::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+}
+
+.settings-range::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.9);
+  cursor: pointer;
+  border: none;
+}
+
+body.light .settings-range {
+  background: rgba(0, 0, 0, 0.12);
+}
+
+body.light .settings-range::-webkit-slider-thumb {
+  background: rgba(50, 60, 80, 0.9);
+}
+
+.settings-range-value {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.6);
+  min-width: 50px;
+  text-align: right;
+  font-family: 'SF Mono', 'Monaco', monospace;
+}
+
+body.light .settings-range-value {
+  color: rgba(50, 60, 80, 0.65);
+}
+
+/* Select dropdown в стиле виджетов */
+.settings-select {
+  padding: 0.35rem 0.7rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: linear-gradient(180deg, rgba(43, 49, 62, 0.68), rgba(21, 25, 33, 0.52));
+  color: rgba(238, 242, 247, 0.85);
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  outline: none;
+  min-width: 130px;
+  transition: all 0.2s ease;
+}
+
+.settings-select:hover {
+  background: linear-gradient(180deg, rgba(50, 58, 73, 0.76), rgba(24, 29, 38, 0.58));
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.settings-select option {
+  background: #1a1c24;
+  color: #e0e0e0;
+}
+
+body.light .settings-select {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(231, 236, 245, 0.52));
+  border-color: rgba(88, 102, 134, 0.12);
+  color: rgba(45, 56, 78, 0.85);
+}
+
+body.light .settings-select option {
+  background: #f0f2f5;
+  color: #2c3540;
+}
+
+/* Toggle button — стиль как у кнопок плеера */
+.settings-toggle {
+  min-width: 64px;
+  padding: 0.35rem 0.7rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: linear-gradient(180deg, rgba(43, 49, 62, 0.68), rgba(21, 25, 33, 0.52));
+  color: rgba(238, 242, 247, 0.7);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.settings-toggle.active {
+  background: linear-gradient(180deg, rgba(62, 91, 144, 0.82), rgba(32, 48, 79, 0.76));
+  border-color: rgba(176, 200, 255, 0.25);
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.settings-toggle:hover {
+  transform: translateY(-1px);
+}
+
+.settings-toggle:active {
+  transform: scale(0.97);
+}
+
+body.light .settings-toggle {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(231, 236, 245, 0.52));
+  border-color: rgba(88, 102, 134, 0.12);
+  color: rgba(45, 56, 78, 0.78);
+}
+
+body.light .settings-toggle.active {
+  background: linear-gradient(180deg, rgba(218, 230, 255, 0.95), rgba(189, 209, 247, 0.85));
+  border-color: rgba(96, 129, 203, 0.25);
+  color: rgba(36, 50, 83, 0.94);
+}
+
+/* Info — как текст */
+.settings-info {
+  font-size: 0.85rem;
+  font-family: 'SF Mono', 'Monaco', monospace;
+  color: rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.05);
+  padding: 0.25rem 0.75rem;
+  border-radius: 1rem;
+}
+
+body.light .settings-info {
+  color: rgba(50, 60, 80, 0.65);
+  background: rgba(0, 0, 0, 0.04);
+}
+
+/* Кнопка сброса — как climate-off-all */
+.settings-reset-btn {
+  width: 100%;
+  margin-top: 1rem;
+  margin-bottom: 0.5rem;
+  padding: 0.7rem;
+  border-radius: 1rem;
+  background: linear-gradient(180deg, rgba(46, 52, 66, 0.92), rgba(24, 28, 36, 0.78));
+  border: 1px solid rgba(255, 100, 100, 0.2);
+  color: rgba(255, 150, 150, 0.85);
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.settings-reset-btn:hover {
+  background: linear-gradient(180deg, rgba(56, 62, 76, 0.92), rgba(30, 34, 42, 0.85));
+  border-color: rgba(255, 100, 100, 0.35);
+  transform: translateY(-1px);
+}
+
+.settings-reset-btn:active {
+  transform: scale(0.98);
+}
+
+body.light .settings-reset-btn {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(232, 237, 245, 0.65));
+  border-color: rgba(255, 100, 100, 0.25);
+  color: rgba(180, 80, 80, 0.85);
+}
+
+body.light .settings-reset-btn:hover {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(242, 247, 255, 0.75));
+  border-color: rgba(255, 100, 100, 0.35);
+}
+
+/* Адаптация для мобильных */
+@media (max-width: 600px) {
+  .settings-modal-content {
+    width: 92vw;
+    max-height: 88vh;
+  }
+  
+  .settings-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.6rem;
+  }
+  
+  .settings-range-container {
+    width: 100%;
+    min-width: auto;
+  }
+  
+  .settings-label {
+    font-size: 0.8rem;
+  }
+  
+  .settings-select {
+    width: 100%;
+    min-width: auto;
+  }
+  
+  .settings-toggle {
+    min-width: 80px;
+  }
+}
+
+/* Для планшетов */
+@media (min-width: 601px) and (max-width: 1024px) {
+  .settings-modal-content {
+    width: 70vw;
+  }
+}

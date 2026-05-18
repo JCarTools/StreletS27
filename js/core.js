@@ -13,10 +13,13 @@ const storage = {
   },
   load(key) {
     try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : null; } catch (e) { console.error("Storage load error:", e); return null; }
+  },
+  remove(key) {
+    try { localStorage.removeItem(key); } catch(e) { console.error("Storage remove error:", e); }
   }
 };
 
-// Android API с заглушками
+// Android API с заглушками и диагностикой
 const android = {
   call(method, ...args) {
     if (!IS_ANDROID) {
@@ -24,7 +27,11 @@ const android = {
       return null;
     }
     if (window.androidApi && typeof window.androidApi[method] === 'function') {
-      try { return window.androidApi[method](...args); } catch (e) { console.error(`Android API error [${method}]:`, e); }
+      try {
+        const result = window.androidApi[method](...args);
+        console.log(`[ANDROID] ${method} ->`, result);
+        return result;
+      } catch (e) { console.error(`Android API error [${method}]:`, e); }
     } else { console.warn(`Android API method not available: ${method}`); }
     return null;
   },
@@ -35,7 +42,36 @@ const android = {
   runApp(pkg) { this.call('runApp', TOKEN, pkg); },
   requestClimateState() { this.call('requestClimateState', TOKEN); },
   requestClimateStateForCommand(cmd) { this.call('requestClimateStateForCommand', TOKEN, cmd); },
-  setVolume(volume) { this.call('setvol', TOKEN, volume); },
+  getCarData(key) { 
+    const res = this.call('getCarData', TOKEN, key);
+    return res || '{}';
+  },
+  // ДИАГНОСТИРОВАННЫЕ МЕТОДЫ ГРОМКОСТИ
+  getVolume() {
+    if (!IS_ANDROID) return 50;
+    const vol = this.call('getvol', TOKEN);
+    console.log(`[ANDROID] getvol вернул: ${vol}`);
+    if (vol !== null && vol !== undefined && typeof vol === 'number' && vol >= 0 && vol <= 100) {
+      return parseInt(vol);
+    }
+    console.warn('[ANDROID] getVolume вернул некорректное значение:', vol);
+    return 50;
+  },
+  setVolume(volume) {
+    const vol = Math.min(100, Math.max(0, volume));
+    console.log(`[ANDROID] setVolume вызван с ${vol}`);
+    if (IS_ANDROID) {
+      const result = this.call('setvol', TOKEN, vol);
+      console.log(`[ANDROID] setvol вернул:`, result);
+      return result;
+    } else {
+      console.log('[ANDROID] заглушка setVolume:', vol);
+      return null;
+    }
+  },
+  requestMusicState() {
+    this.call('requestMusicState', TOKEN);
+  },
   onJsReady() { this.call('onJsReady', TOKEN); },
   onClose() { this.call('onClose', TOKEN); },
   onSettings() { this.call('onSettings', TOKEN); }
@@ -59,24 +95,10 @@ function showToast(message, duration = 3000) {
   setTimeout(() => toast.remove(), duration);
 }
 
-// Универсальное длинное нажатие с ripple и защитой от последующего клика
+// Универсальное длинное нажатие
 function makeLongPressable(element, callback, options = {}) {
-  const { delay = 700, ripple = true, preventDefaultOnStart = false } = options;
+  const { delay = 700, preventDefaultOnStart = false } = options;
   let pressTimer, longPressTriggered = false;
-  
-  const addRipple = (e) => {
-    if (!ripple) return;
-    const rect = element.getBoundingClientRect();
-    const size = Math.max(rect.width, rect.height);
-    const x = (e.clientX || (e.touches ? e.touches[0].clientX : rect.left + rect.width/2)) - rect.left;
-    const y = (e.clientY || (e.touches ? e.touches[0].clientY : rect.top + rect.height/2)) - rect.top;
-    const rippleEl = document.createElement('span');
-    rippleEl.classList.add('ripple');
-    rippleEl.style.cssText = `position:absolute; border-radius:50%; background:rgba(255,255,255,0.3); transform:scale(0); animation:ripple-animation 0.5s ease-out; pointer-events:none; width:${size}px; height:${size}px; left:${x - size/2}px; top:${y - size/2}px;`;
-    element.style.position = 'relative';
-    element.appendChild(rippleEl);
-    setTimeout(() => rippleEl.remove(), 500);
-  };
   
   const start = (e) => {
     longPressTriggered = false;
@@ -84,9 +106,7 @@ function makeLongPressable(element, callback, options = {}) {
     if (preventDefaultOnStart) e.preventDefault();
     pressTimer = setTimeout(() => { 
       longPressTriggered = true; 
-      addRipple(e); 
       callback(element, e);
-      // Отметка, что было длинное нажатие – блокируем ближайший click
       element.setAttribute('data-long-pressed', 'true');
       setTimeout(() => element.removeAttribute('data-long-pressed'), 300);
     }, delay);
@@ -177,10 +197,8 @@ const loader = {
   hide() { document.getElementById('global-loader')?.classList.add('hidden'); }
 };
 
-// Общий объект для модулей (будет наполняться в других файлах)
 const modules = {};
 
-// Включение/выключение отладочных логов
 const DEBUG = false;
 const log = (...args) => DEBUG && console.log("[App]", ...args);
 const warn = (...args) => console.warn("[App]", ...args);
