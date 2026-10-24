@@ -1,7 +1,6 @@
 /**********************************************
  * Модуль: Приложения
- * [FIX] Обработка поточных событий launcherCatalog.
- * [FIX] Ждем "done: true" или таймаут 2 сек, чтобы завершить загрузку.
+ * [FIX] Универсальное создание иконок (base64, data:, svg).
  **********************************************/
 
 modules.apps = (function() {
@@ -21,6 +20,40 @@ modules.apps = (function() {
     });
   }
 
+  // Универсальная функция создания картинки приложения
+  function createAppImage(iconStr) {
+    const img = document.createElement('img');
+    if (!iconStr) {
+      img.src = 'icons/Default.svg';
+      return img;
+    }
+    
+    let src = String(iconStr).trim();
+    
+    // Если это уже готовый URI или ссылка
+    if (src.startsWith('data:image') || src.startsWith('http://') || src.startsWith('https://')) {
+      img.src = src;
+      return img;
+    }
+    
+    // Если это SVG-код
+    if (src.startsWith('<svg')) {
+      img.src = 'data:image/svg+xml;utf8,' + encodeURIComponent(src);
+      return img;
+    }
+
+    // Если в строке уже есть base64, просто добавляем префикс png
+    if (src.includes('base64,')) {
+      const base64Data = src.split('base64,')[1];
+      img.src = `data:image/png;base64,${base64Data}`;
+      return img;
+    }
+
+    // Иначе считаем, что это чистый base64
+    img.src = `data:image/png;base64,${src}`;
+    return img;
+  }
+
   function renderAppsInGrid() {
     if (!currentPickerGrid) return;
     
@@ -36,17 +69,8 @@ modules.apps = (function() {
       const d = document.createElement('div');
       d.className = 'picker-item';
 
-      const img = document.createElement('img');
-      if (app.icon) {
-         if (app.icon.startsWith('data:image') || app.icon.startsWith('http')) {
-            img.src = app.icon;
-         } else {
-            img.src = `data:image/png;base64,${app.icon}`;
-         }
-      } else {
-         img.src = 'icons/Default.svg';
-      }
-
+      const img = createAppImage(app.icon);
+      
       const nameSpan = document.createElement('span');
       nameSpan.textContent = app.name || app.label || app.package || 'Приложение';
 
@@ -65,7 +89,10 @@ modules.apps = (function() {
         const slotEl = document.querySelector(`.app_slot[data-slot="${currentPickerSlot}"]`);
         if (slotEl) {
           slotEl.setAttribute('data-app-name', app.name || app.label || '');
-          slotEl.innerHTML = `<img src="${img.src}">`;
+          
+          const slotImg = createAppImage(app.icon);
+          slotEl.innerHTML = '';
+          slotEl.appendChild(slotImg);
           
           const showLabels = storage.load('setting_showAppLabels');
           if (showLabels) {
@@ -87,16 +114,13 @@ modules.apps = (function() {
     currentPickerGrid.appendChild(fragment);
   }
 
-  // Вызывается из main.js при событии launcherCatalog
   function handleLauncherCatalog(raw) {
-    if (!isPickerOpen) return; // Игнорируем, если пикер закрыт
+    if (!isPickerOpen) return;
 
     let data = typeof raw === 'string' ? JSON.parse(raw) : raw;
     if (!data) return;
 
-    // Если пришел пакет с приложениями
     if (data.section === 'apps' && Array.isArray(data.items)) {
-      // Избегаем дублей (проверяем по package)
       data.items.forEach(newApp => {
         const pkg = newApp.package || newApp.packageName;
         if (!pendingApps.find(existing => (existing.package || existing.packageName) === pkg)) {
@@ -106,7 +130,6 @@ modules.apps = (function() {
       scheduleRender();
     }
 
-    // Если это финальный пакет (done: true)
     if (data.done === true) {
       if (loadTimeout) clearTimeout(loadTimeout);
       scheduleRender();
@@ -138,12 +161,10 @@ modules.apps = (function() {
     currentPickerGrid.innerHTML = '<div style="grid-column:1/-1;padding:20px;text-align:center;">Загрузка приложений...</div>';
     picker.classList.add('open');
 
-    // Запускаем запрос каталога
     if (window.androidApi && typeof window.androidApi.requestLauncherCatalogAsync === 'function') {
       const reqId = 'app_cat_' + Date.now();
       window.androidApi.requestLauncherCatalogAsync(TOKEN, reqId);
     } else if (window.android && typeof android.getUserApps === 'function') {
-      // Fallback для старых мостов
       try {
         const raw = android.getUserApps();
         const apps = JSON.parse(raw);
@@ -154,7 +175,6 @@ modules.apps = (function() {
       scheduleRender();
     }
 
-    // Защитный таймаут: если "done" не пришел за 2 секунды, показываем то, что есть
     if (loadTimeout) clearTimeout(loadTimeout);
     loadTimeout = setTimeout(() => {
       if (pendingApps.length === 0) {
@@ -173,16 +193,9 @@ modules.apps = (function() {
       return;
     }
     
-    let imgSrc = 'icons/Default.svg';
-    if (saved.icon) {
-       if (saved.icon.startsWith('data:image') || saved.icon.startsWith('http')) {
-          imgSrc = saved.icon;
-       } else {
-          imgSrc = `data:image/png;base64,${saved.icon}`;
-       }
-    }
-
-    slotElement.innerHTML = `<img src="${imgSrc}">`;
+    const imgSrc = createAppImage(saved.icon);
+    slotElement.innerHTML = '';
+    slotElement.appendChild(imgSrc);
     slotElement.setAttribute('data-app-name', saved.name || '');
     
     const showLabels = storage.load('setting_showAppLabels');
@@ -318,6 +331,6 @@ modules.apps = (function() {
     reinitSlots,
     updateAppLabels,
     renderSlot,
-    handleLauncherCatalog // Экспортируем для main.js
+    handleLauncherCatalog
   };
 })();
