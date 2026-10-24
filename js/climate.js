@@ -1,6 +1,6 @@
 /**********************************************
  * Модуль: Климат (2x3)
- * [FIX] Багажник: идеальный SVG-контур (машина со стрелкой).
+ * [FIX] Добавлен reinitSlots: перепривязка кликов на новые слоты.
  **********************************************/
 
 modules.climate = (function() {
@@ -54,7 +54,6 @@ modules.climate = (function() {
     return cmd.off || `${cmd.cmd}_0`;
   }
 
-  // Идеальный SVG (машина с открытым багажником и стрелкой)
   function getTrunkSvg(color = '#fff') {
     return `<svg viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width: 100%; height: 100%; display: block;">
       <path d="M3 17h18" />
@@ -274,11 +273,13 @@ modules.climate = (function() {
     android.runEnum(cmdToSend);
   }
 
+  // --- Инициализация слотов и перепривязка кликов ---
   function initSlots() {
     document.querySelectorAll('.climate_slot').forEach(slot => {
       if (slot._clickHandler) slot.removeEventListener('click', slot._clickHandler);
       slot._clickHandler = (e) => { e.stopPropagation(); e.preventDefault(); onSlotClick(slot); };
       slot.addEventListener('click', slot._clickHandler);
+      // Перепривязываем longPress на случай если элемент новый
       makeLongPressable(slot, () => openPicker(slot), { delay: 700 });
     });
   }
@@ -312,6 +313,14 @@ modules.climate = (function() {
     picker.classList.add('open');
   }
 
+  // Экспортируем reinitSlots, чтобы settings.js мог вызвать его после смены количества слотов
+  function reinitSlots() {
+    setTimeout(() => {
+      initSlots();
+      updateAll();
+    }, 50);
+  }
+
   function init() {
     loadCommands();
     initSlots();
@@ -342,5 +351,5 @@ modules.climate = (function() {
     });
   }
 
-  return { init, updateState: applyCarData, destroy: () => {} };
+  return { init, updateState: applyCarData, destroy: () => {}, reinitSlots };
 })();
