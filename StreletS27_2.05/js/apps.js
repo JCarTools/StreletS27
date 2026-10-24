@@ -1,0 +1,221 @@
+/**********************************************
+ * Модуль: Приложения (слоты 2, 4, 6)
+ *  - OEM-touch перепривязывается к новым слотам
+ **********************************************/
+
+modules.apps = (function() {
+  let currentPickerSlot = null;
+
+  function openPickerForSlot(slotElement) {
+    const slotId = slotElement.dataset.slot;
+    if (!slotId) return;
+
+    currentPickerSlot = slotId;
+    const picker = document.getElementById("app_picker");
+    const grid = document.getElementById("app-picker-grid");
+    if (!picker || !grid) return;
+
+    grid.innerHTML = '<div style="grid-column:1/-1;padding:20px;text-align:center;">Загрузка приложений...</div>';
+    picker.classList.add('open');
+
+    setTimeout(() => {
+      grid.innerHTML = '';
+      try {
+        const appsRaw = android.getUserApps();
+        let apps = [];
+        try { apps = JSON.parse(appsRaw); }
+        catch (e) { console.error('[Apps] Ошибка парсинга приложений:', e); apps = []; }
+
+        if (!Array.isArray(apps) || !apps.length) {
+          grid.innerHTML = '<div style="grid-column:1/-1;padding:20px;text-align:center;">Нет установленных приложений</div>';
+          return;
+        }
+
+        apps.forEach(app => {
+          const d = document.createElement('div');
+          d.className = 'picker-item';
+
+          const img = document.createElement('img');
+          img.src = `data:image/png;base64,${app.icon}`;
+
+          const nameSpan = document.createElement('span');
+          nameSpan.textContent = app.name;
+
+          d.appendChild(img);
+          d.appendChild(nameSpan);
+
+          d.onclick = () => {
+            storage.save(`app_slot_${currentPickerSlot}`, {
+              package: app.package,
+              name: app.name,
+              icon: app.icon
+            });
+
+            const slotEl = document.querySelector(`.app_slot[data-slot="${currentPickerSlot}"]`);
+            if (slotEl) {
+              slotEl.setAttribute('data-app-name', app.name);
+              slotEl.innerHTML = `<img src="data:image/png;base64,${app.icon}">`;
+              const showLabels = storage.load('setting_showAppLabels');
+              if (showLabels) {
+                const labelSpan = document.createElement('span');
+                labelSpan.className = 'app-label';
+                labelSpan.textContent = app.name;
+                slotEl.appendChild(labelSpan);
+                slotEl.classList.add('has-label');
+              }
+            }
+
+            picker.classList.remove('open');
+            currentPickerSlot = null;
+          };
+
+          grid.appendChild(d);
+        });
+      } catch (e) {
+        console.error('[Apps] Ошибка загрузки приложений:', e);
+        grid.innerHTML = '<div style="grid-column:1/-1;padding:20px;text-align:center;">Ошибка загрузки приложений</div>';
+      }
+    }, 10);
+  }
+
+  function renderSlot(slotElement) {
+    const slotId = slotElement.dataset.slot;
+    const saved = storage.load(`app_slot_${slotId}`);
+
+    if (!saved) {
+      slotElement.innerHTML = '<span style="font-size:1.5rem;opacity:0.5;">+</span>';
+      slotElement.classList.remove('has-label');
+      return;
+    }
+
+    slotElement.innerHTML = `<img src="data:image/png;base64,${saved.icon}">`;
+    slotElement.setAttribute('data-app-name', saved.name);
+
+    const showLabels = storage.load('setting_showAppLabels');
+    if (showLabels) {
+      const labelSpan = document.createElement('span');
+      labelSpan.className = 'app-label';
+      labelSpan.textContent = saved.name;
+      slotElement.appendChild(labelSpan);
+      slotElement.classList.add('has-label');
+    } else {
+      slotElement.classList.remove('has-label');
+    }
+  }
+
+  function updateAllSlots() {
+    document.querySelectorAll('.app_slot').forEach(renderSlot);
+  }
+
+  function initSlots() {
+    const slots = document.querySelectorAll('.app_slot');
+    slots.forEach(slot => {
+      const slotId = slot.dataset.slot;
+
+      const oldClickHandler = slot._clickHandler;
+      if (oldClickHandler) slot.removeEventListener('click', oldClickHandler);
+
+      const clickHandler = (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+
+        if (slot.getAttribute('data-long-pressed') === 'true') {
+          slot.removeAttribute('data-long-pressed');
+          return;
+        }
+
+        const saved = storage.load(`app_slot_${slotId}`);
+        if (!saved) {
+          openPickerForSlot(slot);
+        } else if (saved.package && typeof android.runApp === 'function') {
+          try {
+            android.runApp(saved.package);
+          } catch (e) {
+            console.error('[Apps] Ошибка запуска:', e);
+            if (typeof showToast === 'function') showToast('Не удалось запустить приложение', 2000);
+          }
+        }
+      };
+
+      const longPressHandler = () => openPickerForSlot(slot);
+
+      slot._clickHandler = clickHandler;
+      slot._longPressHandler = longPressHandler;
+      slot.addEventListener('click', clickHandler);
+      makeLongPressable(slot, longPressHandler, { delay: 700, preventDefaultOnStart: false });
+    });
+
+    // OEM-фидбек для новых слотов
+    if (typeof attachOemTouchFeedback === 'function') {
+      attachOemTouchFeedback('.app_slot');
+    }
+  }
+
+  function reinitSlots() {
+    setTimeout(() => {
+      initSlots();
+      updateAllSlots();
+      const showLabels = storage.load('setting_showAppLabels');
+      updateAppLabels(showLabels);
+    }, 50);
+  }
+
+  function updateAppLabels(show) {
+    const slots = document.querySelectorAll('.app_slot');
+    slots.forEach(slot => {
+      const saved = storage.load(`app_slot_${slot.dataset.slot}`);
+      if (saved && show) {
+        if (!slot.querySelector('.app-label')) {
+          const labelSpan = document.createElement('span');
+          labelSpan.className = 'app-label';
+          labelSpan.textContent = saved.name;
+          slot.appendChild(labelSpan);
+          slot.classList.add('has-label');
+        }
+      } else if (!show) {
+        const label = slot.querySelector('.app-label');
+        if (label) label.remove();
+        slot.classList.remove('has-label');
+      }
+    });
+  }
+
+  function initPicker() {
+    const picker = document.getElementById("app_picker");
+    const close = document.getElementById("app-picker-close");
+
+    if (close) {
+      const newClose = close.cloneNode(true);
+      close.parentNode.replaceChild(newClose, close);
+      newClose.addEventListener('click', (e) => {
+        e.stopPropagation();
+        picker.classList.remove('open');
+        currentPickerSlot = null;
+      });
+    }
+
+    if (picker) {
+      picker.addEventListener('click', (e) => {
+        if (e.target === picker) {
+          picker.classList.remove('open');
+          currentPickerSlot = null;
+        }
+      });
+    }
+  }
+
+  function init() {
+    console.log('[Apps] Инициализация...');
+    initPicker();
+    initSlots();
+    updateAllSlots();
+
+    const showLabels = storage.load('setting_showAppLabels');
+    if (showLabels !== undefined && showLabels !== null) {
+      updateAppLabels(showLabels);
+    }
+    console.log('[Apps] Инициализация завершена');
+  }
+
+  return { init, reinitSlots, updateAppLabels, renderSlot };
+})();
