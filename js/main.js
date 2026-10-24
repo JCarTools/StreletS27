@@ -1,7 +1,7 @@
 /**********************************************
  * My Black Window - Dashboard
- * [DIAG] Визуальная диагностика для машины.
- * [FIX] carData больше НЕ прокидывается в climate.
+ * [FIX] Прелоадер скрывается максимум через 1.5 сек.
+ *       Тяжелые модули догружаются в фоне.
  **********************************************/
 
 let originalOnAndroidEvent = window.onAndroidEvent;
@@ -88,7 +88,8 @@ function handleDoubleTap(e) {
 }
 
 let isReady = false;
-function onAllModulesReady() {
+
+function hidePreloader() {
   if (isReady) return;
   isReady = true;
   const preloader = document.getElementById('startup-preloader');
@@ -100,6 +101,11 @@ function onAllModulesReady() {
       if (preloader.parentNode) preloader.parentNode.removeChild(preloader);
     }, 500);
   }
+  console.log('[Main] Прелоадер скрыт');
+}
+
+function onAllModulesReady() {
+  hidePreloader();
 }
 
 function cleanupIntervals() {
@@ -115,14 +121,15 @@ window.addEventListener('beforeunload', cleanupIntervals);
 async function initUI() {
   if (typeof diag !== 'undefined') diag.init();
 
+  // [FIX] Не ждем восстановления обоев, запускаем в фоне, чтобы не тормозить старт
   if (modules.wallpaper) {
-    try { await modules.wallpaper.restore(); }
-    catch (e) { warn('[Main] wallpaper.restore error:', e); }
-    try { modules.wallpaper.initAutoMode(); }
-    catch (e) { warn('[Main] wallpaper.initAutoMode error:', e); }
+    modules.wallpaper.restore().then(() => {
+      modules.wallpaper.initAutoMode();
+    }).catch(e => warn('[Main] wallpaper.restore error:', e));
     document.body.classList.remove('widgets-hidden');
     storage.save('widgetsHiddenByUser', false);
   }
+
   if (modules.clock) modules.clock.start();
   if (modules.brandEditor) modules.brandEditor.init();
   if (modules.player) modules.player.init();
@@ -229,15 +236,28 @@ async function initUI() {
 }
 
 async function start() {
+  // [FIX] Запускаем таймер: максимум 1.5 секунды показываем прелоадер.
+  // Если модули загрузятся быстрее — скроем раньше.
+  const safetyTimeout = setTimeout(() => {
+    console.warn('[Main] Принудительное скрытие прелоадера (таймаут 1.5с)');
+    hidePreloader();
+  }, 1500);
+
   try {
-    console.log('[Main] Загрузка климата...');
     if (modules.climate) await modules.climate.init();
-    console.log('[Main] Климат загружен');
     await initUI();
   } catch (e) {
     console.error('[Main] Ошибка инициализации:', e);
   } finally {
-    setTimeout(onAllModulesReady, 500);
+    // Как только базовая инициализация прошла — скрываем прелоадер
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          clearTimeout(safetyTimeout);
+          hidePreloader();
+        }, 100);
+      });
+    });
   }
 }
 
