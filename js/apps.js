@@ -1,10 +1,29 @@
 /**********************************************
  * Модуль: Приложения (слоты 2, 4, 6)
- *  - OEM-touch перепривязывается к новым слотам
+ * [FIX] Устранена ошибка загрузки приложений.
+ *       Добавлен безопасный парсинг, обработка пустого списка
+ *       и защита от падения, если мост вернул не массив.
  **********************************************/
 
 modules.apps = (function() {
   let currentPickerSlot = null;
+
+  function safeParseApps(raw) {
+    if (!raw) return [];
+    let data = raw;
+    if (typeof raw === 'string') {
+      try { data = JSON.parse(raw); } catch { return []; }
+    }
+    if (Array.isArray(data)) return data;
+    // Если мост вернул объект с массивом внутри (например, { apps: [...] })
+    if (data && typeof data === 'object') {
+      if (Array.isArray(data.apps)) return data.apps;
+      if (Array.isArray(data.list)) return data.list;
+      if (Array.isArray(data.items)) return data.items;
+      if (Array.isArray(data.data)) return data.data;
+    }
+    return [];
+  }
 
   function openPickerForSlot(slotElement) {
     const slotId = slotElement.dataset.slot;
@@ -15,67 +34,77 @@ modules.apps = (function() {
     const grid = document.getElementById("app-picker-grid");
     if (!picker || !grid) return;
 
-    grid.innerHTML = '<div style="grid-column:1/-1;padding:20px;text-align:center;">Загрузка приложений...</div>';
+    grid.innerHTML = '<div style="grid-column:1/-1;padding:20px;text-align:center;color:rgba(255,255,255,0.5);">Загрузка приложений...</div>';
     picker.classList.add('open');
 
     setTimeout(() => {
       grid.innerHTML = '';
+      let apps = [];
       try {
-        const appsRaw = android.getUserApps();
-        let apps = [];
-        try { apps = JSON.parse(appsRaw); }
-        catch (e) { console.error('[Apps] Ошибка парсинга приложений:', e); apps = []; }
+        if (window.android && typeof android.getUserApps === 'function') {
+          const appsRaw = android.getUserApps();
+          apps = safeParseApps(appsRaw);
+        }
+      } catch (e) {
+        console.error('[Apps] Ошибка получения приложений:', e);
+      }
 
-        if (!Array.isArray(apps) || !apps.length) {
-          grid.innerHTML = '<div style="grid-column:1/-1;padding:20px;text-align:center;">Нет установленных приложений</div>';
-          return;
+      if (!apps.length) {
+        grid.innerHTML = '<div style="grid-column:1/-1;padding:20px;text-align:center;">Нет установленных приложений</div>';
+        return;
+      }
+
+      apps.forEach(app => {
+        if (!app) return;
+        const d = document.createElement('div');
+        d.className = 'picker-item';
+
+        const img = document.createElement('img');
+        // Если иконка в base64, добавляем префикс
+        if (app.icon) {
+           if (app.icon.startsWith('data:image') || app.icon.startsWith('http')) {
+              img.src = app.icon;
+           } else {
+              img.src = `data:image/png;base64,${app.icon}`;
+           }
+        } else {
+           img.src = 'icons/Default.svg'; // Заглушка, если нет иконки
         }
 
-        apps.forEach(app => {
-          const d = document.createElement('div');
-          d.className = 'picker-item';
+        const nameSpan = document.createElement('span');
+        nameSpan.textContent = app.name || app.label || app.package || 'Приложение';
 
-          const img = document.createElement('img');
-          img.src = `data:image/png;base64,${app.icon}`;
+        d.appendChild(img);
+        d.appendChild(nameSpan);
 
-          const nameSpan = document.createElement('span');
-          nameSpan.textContent = app.name;
+        d.onclick = () => {
+          storage.save(`app_slot_${currentPickerSlot}`, {
+            package: app.package || app.packageName,
+            name: app.name || app.label,
+            icon: app.icon
+          });
 
-          d.appendChild(img);
-          d.appendChild(nameSpan);
-
-          d.onclick = () => {
-            storage.save(`app_slot_${currentPickerSlot}`, {
-              package: app.package,
-              name: app.name,
-              icon: app.icon
-            });
-
-            const slotEl = document.querySelector(`.app_slot[data-slot="${currentPickerSlot}"]`);
-            if (slotEl) {
-              slotEl.setAttribute('data-app-name', app.name);
-              slotEl.innerHTML = `<img src="data:image/png;base64,${app.icon}">`;
-              const showLabels = storage.load('setting_showAppLabels');
-              if (showLabels) {
-                const labelSpan = document.createElement('span');
-                labelSpan.className = 'app-label';
-                labelSpan.textContent = app.name;
-                slotEl.appendChild(labelSpan);
-                slotEl.classList.add('has-label');
-              }
+          const slotEl = document.querySelector(`.app_slot[data-slot="${currentPickerSlot}"]`);
+          if (slotEl) {
+            slotEl.setAttribute('data-app-name', app.name || app.label || '');
+            slotEl.innerHTML = `<img src="${img.src}">`;
+            const showLabels = storage.load('setting_showAppLabels');
+            if (showLabels) {
+              const labelSpan = document.createElement('span');
+              labelSpan.className = 'app-label';
+              labelSpan.textContent = app.name || app.label || '';
+              slotEl.appendChild(labelSpan);
+              slotEl.classList.add('has-label');
             }
+          }
 
-            picker.classList.remove('open');
-            currentPickerSlot = null;
-          };
+          picker.classList.remove('open');
+          currentPickerSlot = null;
+        };
 
-          grid.appendChild(d);
-        });
-      } catch (e) {
-        console.error('[Apps] Ошибка загрузки приложений:', e);
-        grid.innerHTML = '<div style="grid-column:1/-1;padding:20px;text-align:center;">Ошибка загрузки приложений</div>';
-      }
-    }, 10);
+        grid.appendChild(d);
+      });
+    }, 50);
   }
 
   function renderSlot(slotElement) {
@@ -88,14 +117,23 @@ modules.apps = (function() {
       return;
     }
 
-    slotElement.innerHTML = `<img src="data:image/png;base64,${saved.icon}">`;
-    slotElement.setAttribute('data-app-name', saved.name);
+    let imgSrc = 'icons/Default.svg';
+    if (saved.icon) {
+       if (saved.icon.startsWith('data:image') || saved.icon.startsWith('http')) {
+          imgSrc = saved.icon;
+       } else {
+          imgSrc = `data:image/png;base64,${saved.icon}`;
+       }
+    }
+
+    slotElement.innerHTML = `<img src="${imgSrc}">`;
+    slotElement.setAttribute('data-app-name', saved.name || '');
 
     const showLabels = storage.load('setting_showAppLabels');
     if (showLabels) {
       const labelSpan = document.createElement('span');
       labelSpan.className = 'app-label';
-      labelSpan.textContent = saved.name;
+      labelSpan.textContent = saved.name || '';
       slotElement.appendChild(labelSpan);
       slotElement.classList.add('has-label');
     } else {
@@ -145,7 +183,6 @@ modules.apps = (function() {
       makeLongPressable(slot, longPressHandler, { delay: 700, preventDefaultOnStart: false });
     });
 
-    // OEM-фидбек для новых слотов
     if (typeof attachOemTouchFeedback === 'function') {
       attachOemTouchFeedback('.app_slot');
     }
@@ -168,7 +205,7 @@ modules.apps = (function() {
         if (!slot.querySelector('.app-label')) {
           const labelSpan = document.createElement('span');
           labelSpan.className = 'app-label';
-          labelSpan.textContent = saved.name;
+          labelSpan.textContent = saved.name || '';
           slot.appendChild(labelSpan);
           slot.classList.add('has-label');
         }
