@@ -1,8 +1,7 @@
 /**********************************************
  * Модуль: Приложения (слоты 2, 4, 6)
- * [FIX] Устранена ошибка загрузки приложений.
- *       Добавлен безопасный парсинг, обработка пустого списка
- *       и защита от падения, если мост вернул не массив.
+ * [FIX] Возвращена рабочая логика назначения приложений на слоты.
+ * [FIX] Добавлен безопасный парсинг ответа моста.
  **********************************************/
 
 modules.apps = (function() {
@@ -15,7 +14,6 @@ modules.apps = (function() {
       try { data = JSON.parse(raw); } catch { return []; }
     }
     if (Array.isArray(data)) return data;
-    // Если мост вернул объект с массивом внутри (например, { apps: [...] })
     if (data && typeof data === 'object') {
       if (Array.isArray(data.apps)) return data.apps;
       if (Array.isArray(data.list)) return data.list;
@@ -28,15 +26,16 @@ modules.apps = (function() {
   function openPickerForSlot(slotElement) {
     const slotId = slotElement.dataset.slot;
     if (!slotId) return;
-
+    
     currentPickerSlot = slotId;
     const picker = document.getElementById("app_picker");
     const grid = document.getElementById("app-picker-grid");
+    
     if (!picker || !grid) return;
-
-    grid.innerHTML = '<div style="grid-column:1/-1;padding:20px;text-align:center;color:rgba(255,255,255,0.5);">Загрузка приложений...</div>';
+    
+    grid.innerHTML = '<div style="grid-column:1/-1;padding:20px;text-align:center;">Загрузка приложений...</div>';
     picker.classList.add('open');
-
+    
     setTimeout(() => {
       grid.innerHTML = '';
       let apps = [];
@@ -60,7 +59,6 @@ modules.apps = (function() {
         d.className = 'picker-item';
 
         const img = document.createElement('img');
-        // Если иконка в base64, добавляем префикс
         if (app.icon) {
            if (app.icon.startsWith('data:image') || app.icon.startsWith('http')) {
               img.src = app.icon;
@@ -68,7 +66,7 @@ modules.apps = (function() {
               img.src = `data:image/png;base64,${app.icon}`;
            }
         } else {
-           img.src = 'icons/Default.svg'; // Заглушка, если нет иконки
+           img.src = 'icons/Default.svg';
         }
 
         const nameSpan = document.createElement('span');
@@ -78,16 +76,19 @@ modules.apps = (function() {
         d.appendChild(nameSpan);
 
         d.onclick = () => {
+          // Сохраняем в storage
           storage.save(`app_slot_${currentPickerSlot}`, {
             package: app.package || app.packageName,
-            name: app.name || app.label,
+            name: app.name || app.label || 'Приложение',
             icon: app.icon
           });
 
+          // Обновляем слот на экране
           const slotEl = document.querySelector(`.app_slot[data-slot="${currentPickerSlot}"]`);
           if (slotEl) {
             slotEl.setAttribute('data-app-name', app.name || app.label || '');
             slotEl.innerHTML = `<img src="${img.src}">`;
+            
             const showLabels = storage.load('setting_showAppLabels');
             if (showLabels) {
               const labelSpan = document.createElement('span');
@@ -110,13 +111,13 @@ modules.apps = (function() {
   function renderSlot(slotElement) {
     const slotId = slotElement.dataset.slot;
     const saved = storage.load(`app_slot_${slotId}`);
-
+    
     if (!saved) {
       slotElement.innerHTML = '<span style="font-size:1.5rem;opacity:0.5;">+</span>';
       slotElement.classList.remove('has-label');
       return;
     }
-
+    
     let imgSrc = 'icons/Default.svg';
     if (saved.icon) {
        if (saved.icon.startsWith('data:image') || saved.icon.startsWith('http')) {
@@ -128,7 +129,7 @@ modules.apps = (function() {
 
     slotElement.innerHTML = `<img src="${imgSrc}">`;
     slotElement.setAttribute('data-app-name', saved.name || '');
-
+    
     const showLabels = storage.load('setting_showAppLabels');
     if (showLabels) {
       const labelSpan = document.createElement('span');
@@ -149,36 +150,43 @@ modules.apps = (function() {
     const slots = document.querySelectorAll('.app_slot');
     slots.forEach(slot => {
       const slotId = slot.dataset.slot;
-
+      
       const oldClickHandler = slot._clickHandler;
+      const oldLongPressHandler = slot._longPressHandler;
       if (oldClickHandler) slot.removeEventListener('click', oldClickHandler);
-
+      if (oldLongPressHandler) slot.removeEventListener('contextmenu', oldLongPressHandler);
+      
       const clickHandler = (e) => {
         e.stopPropagation();
         e.preventDefault();
-
+        
         if (slot.getAttribute('data-long-pressed') === 'true') {
           slot.removeAttribute('data-long-pressed');
           return;
         }
-
+        
         const saved = storage.load(`app_slot_${slotId}`);
         if (!saved) {
           openPickerForSlot(slot);
-        } else if (saved.package && typeof android.runApp === 'function') {
-          try {
-            android.runApp(saved.package);
-          } catch (e) {
-            console.error('[Apps] Ошибка запуска:', e);
-            if (typeof showToast === 'function') showToast('Не удалось запустить приложение', 2000);
+        } else {
+          if (saved.package && typeof android.runApp === 'function') {
+            try {
+              android.runApp(saved.package);
+            } catch(e) {
+              console.error('[Apps] Ошибка запуска:', e);
+              if (typeof showToast === 'function') showToast('Не удалось запустить приложение', 2000);
+            }
           }
         }
       };
-
-      const longPressHandler = () => openPickerForSlot(slot);
-
+      
+      const longPressHandler = () => {
+        openPickerForSlot(slot);
+      };
+      
       slot._clickHandler = clickHandler;
       slot._longPressHandler = longPressHandler;
+      
       slot.addEventListener('click', clickHandler);
       makeLongPressable(slot, longPressHandler, { delay: 700, preventDefaultOnStart: false });
     });
@@ -220,7 +228,7 @@ modules.apps = (function() {
   function initPicker() {
     const picker = document.getElementById("app_picker");
     const close = document.getElementById("app-picker-close");
-
+    
     if (close) {
       const newClose = close.cloneNode(true);
       close.parentNode.replaceChild(newClose, close);
@@ -230,7 +238,7 @@ modules.apps = (function() {
         currentPickerSlot = null;
       });
     }
-
+    
     if (picker) {
       picker.addEventListener('click', (e) => {
         if (e.target === picker) {
@@ -246,13 +254,17 @@ modules.apps = (function() {
     initPicker();
     initSlots();
     updateAllSlots();
-
+    
     const showLabels = storage.load('setting_showAppLabels');
     if (showLabels !== undefined && showLabels !== null) {
       updateAppLabels(showLabels);
     }
-    console.log('[Apps] Инициализация завершена');
   }
 
-  return { init, reinitSlots, updateAppLabels, renderSlot };
+  return { 
+    init,
+    reinitSlots,
+    updateAppLabels,
+    renderSlot
+  };
 })();
