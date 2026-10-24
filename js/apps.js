@@ -1,6 +1,6 @@
 /**********************************************
  * Модуль: Приложения
- * [FIX] Если иконка (base64) не грузится, показываем букву приложения.
+ * [FIX] Возврат к простому парсингу base64 (как в v2.1).
  **********************************************/
 
 modules.apps = (function() {
@@ -20,7 +20,7 @@ modules.apps = (function() {
     });
   }
 
-  // Создание визуального блока иконки
+  // Универсальная функция создания картинки приложения
   function createAppIconElement(app, size = '2.2rem') {
     const container = document.createElement('div');
     container.style.width = size;
@@ -30,57 +30,51 @@ modules.apps = (function() {
     container.style.justifyContent = 'center';
     container.style.borderRadius = '0.5rem';
     container.style.overflow = 'hidden';
-    container.style.background = 'rgba(255,255,255,0.08)'; // Легкий фон под букву
-    container.style.color = 'rgba(255,255,255,0.9)';
-    container.style.fontWeight = 'bold';
-    container.style.fontSize = '1rem';
-
+    
     let iconStr = app.icon;
     let hasImage = false;
 
-    if (iconStr && typeof iconStr === 'string') {
+    if (iconStr && typeof iconStr === 'string' && iconStr.length > 20) {
       let src = iconStr.trim();
-      if (src.startsWith('<svg')) {
-        src = 'data:image/svg+xml;utf8,' + encodeURIComponent(src);
-        hasImage = true;
-      } else if (src.startsWith('data:image') || src.startsWith('http')) {
-        hasImage = true;
-      } else if (src.includes('base64,')) {
-        src = `data:image/png;base64,${src.split('base64,')[1]}`;
-        hasImage = true;
-      } else if (src.length > 50) { // Похоже на base64
-        src = `data:image/png;base64,${src}`;
-        hasImage = true;
+      
+      // Если вдруг мост уже прислал с префиксом
+      if (src.startsWith('data:image/')) {
+         // уже готово
+      } else {
+         // Принудительно добавляем префикс
+         src = `data:image/png;base64,${src}`;
       }
       
-      if (hasImage) {
-        const img = document.createElement('img');
-        img.style.width = '100%';
-        img.style.height = '100%';
-        img.style.objectFit = 'contain';
-        img.src = src;
-        
-        // Если картинка не загрузилась — заменяем на букву
-        img.onerror = () => {
-          container.innerHTML = '';
-          const letter = (app.name || app.label || app.package || '?').charAt(0).toUpperCase();
-          container.textContent = letter;
-        };
-        
-        container.appendChild(img);
-        return container;
-      }
+      const img = document.createElement('img');
+      img.style.width = '100%';
+      img.style.height = '100%';
+      img.style.objectFit = 'contain';
+      img.src = src;
+      
+      // Если картинка не загрузилась — заменяем на букву
+      img.onerror = () => {
+        container.innerHTML = '';
+        const letter = (app.name || app.label || app.package || '?').charAt(0).toUpperCase();
+        container.textContent = letter;
+        container.style.background = 'rgba(255,255,255,0.1)';
+        container.style.color = '#fff';
+        container.style.fontWeight = 'bold';
+      };
+      
+      container.appendChild(img);
+      return container;
     }
 
-    // Если картинки нет вообще — показываем букву
+    // Если картинки нет вообще (или она пустая) — показываем букву
     const letter = (app.name || app.label || app.package || '?').charAt(0).toUpperCase();
     container.textContent = letter;
+    container.style.fontWeight = 'bold';
+    container.style.color = '#fff';
     
-    // Рандомный цвет для фона по первой букве (чтобы было красиво)
+    // Рандомный цвет для фона по первой букве
     const colors = ['#e57373', '#f06292', '#ba68c8', '#9575cd', '#7986cb', '#64b5f6', '#4fc3f7', '#4dd0e1', '#4db6ac', '#81c784', '#aed581', '#ffb74d', '#ff8a65', '#a1887f'];
     const charCode = letter.charCodeAt(0) || 0;
     container.style.background = colors[charCode % colors.length];
-    container.style.color = '#fff';
 
     return container;
   }
