@@ -1,78 +1,37 @@
 /**********************************************
  * Модуль: Приложения
- * [FIX] Добавлена подробная диагностика получения приложений.
+ * [FIX] Обработка поточных событий launcherCatalog.
+ * [FIX] Ждем "done: true" или таймаут 2 сек, чтобы завершить загрузку.
  **********************************************/
 
 modules.apps = (function() {
   let currentPickerSlot = null;
+  let currentPickerGrid = null;
+  let pendingApps = [];
+  let isPickerOpen = false;
+  let loadTimeout = null;
+  let renderPending = false;
 
-  function safeParseApps(raw) {
-    if (!raw) return [];
-    let data = raw;
-    if (typeof raw === 'string') {
-      try { data = JSON.parse(raw); } catch { return []; }
-    }
-    if (data && data.section === 'apps' && Array.isArray(data.items)) {
-      return data.items;
-    }
-    if (Array.isArray(data)) return data;
-    if (data && typeof data === 'object') {
-      if (Array.isArray(data.apps)) return data.apps;
-      if (Array.isArray(data.list)) return data.list;
-      if (Array.isArray(data.items)) return data.items;
-      if (Array.isArray(data.data)) return data.data;
-    }
-    return [];
+  function scheduleRender() {
+    if (renderPending) return;
+    renderPending = true;
+    requestAnimationFrame(() => {
+      renderPending = false;
+      renderAppsInGrid();
+    });
   }
 
-  async function openPickerForSlot(slotElement) {
-    const slotId = slotElement.dataset.slot;
-    if (!slotId) return;
+  function renderAppsInGrid() {
+    if (!currentPickerGrid) return;
     
-    currentPickerSlot = slotId;
-    const picker = document.getElementById("app_picker");
-    const grid = document.getElementById("app-picker-grid");
-    
-    if (!picker || !grid) return;
-    
-    grid.innerHTML = '<div style="grid-column:1/-1;padding:20px;text-align:center;">Загрузка приложений...</div>';
-    picker.classList.add('open');
-    
-    let apps = [];
-
-    // 1. Пробуем requestLauncherCatalogAsync
-    try {
-      if (window.androidApi && typeof window.androidApi.requestLauncherCatalogAsync === 'function') {
-        const catalogData = await android.getLauncherCatalogAsync(2000);
-        if (typeof diag !== 'undefined') diag.log(`[Apps] Catalog response: ${JSON.stringify(catalogData).slice(0, 300)}`);
-        if (catalogData) {
-          apps = safeParseApps(catalogData);
-        }
-      }
-    } catch (e) {
-      if (typeof diag !== 'undefined') diag.log(`[Apps] Catalog error: ${e.message}`);
-    }
-
-    // 2. Если пусто — пробуем getUserApps
-    if (!apps.length) {
-      try {
-        if (window.android && typeof android.getUserApps === 'function') {
-          const appsRaw = android.getUserApps();
-          if (typeof diag !== 'undefined') diag.log(`[Apps] getUserApps response: ${String(appsRaw).slice(0, 300)}`);
-          apps = safeParseApps(appsRaw);
-        }
-      } catch (e) {
-        if (typeof diag !== 'undefined') diag.log(`[Apps] getUserApps error: ${e.message}`);
-      }
-    }
-
-    grid.innerHTML = '';
-    if (!apps.length) {
-      grid.innerHTML = '<div style="grid-column:1/-1;padding:20px;text-align:center;">Нет установленных приложений</div>';
+    if (pendingApps.length === 0) {
+      currentPickerGrid.innerHTML = '<div style="grid-column:1/-1;padding:20px;text-align:center;">Нет установленных приложений</div>';
       return;
     }
-
-    apps.forEach(app => {
+    
+    const fragment = document.createDocumentFragment();
+    
+    pendingApps.forEach(app => {
       if (!app) return;
       const d = document.createElement('div');
       d.className = 'picker-item';
@@ -95,6 +54,8 @@ modules.apps = (function() {
       d.appendChild(nameSpan);
 
       d.onclick = () => {
+        if (!currentPickerSlot) return;
+        
         storage.save(`app_slot_${currentPickerSlot}`, {
           package: app.package || app.packageName,
           name: app.name || app.label || 'Приложение',
@@ -116,12 +77,90 @@ modules.apps = (function() {
           }
         }
 
-        picker.classList.remove('open');
-        currentPickerSlot = null;
+        closePicker();
       };
 
-      grid.appendChild(d);
+      fragment.appendChild(d);
     });
+    
+    currentPickerGrid.innerHTML = '';
+    currentPickerGrid.appendChild(fragment);
+  }
+
+  // Вызывается из main.js при событии launcherCatalog
+  function handleLauncherCatalog(raw) {
+    if (!isPickerOpen) return; // Игнорируем, если пикер закрыт
+
+    let data = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    if (!data) return;
+
+    // Если пришел пакет с приложениями
+    if (data.section === 'apps' && Array.isArray(data.items)) {
+      // Избегаем дублей (проверяем по package)
+      data.items.forEach(newApp => {
+        const pkg = newApp.package || newApp.packageName;
+        if (!pendingApps.find(existing => (existing.package || existing.packageName) === pkg)) {
+          pendingApps.push(newApp);
+        }
+      });
+      scheduleRender();
+    }
+
+    // Если это финальный пакет (done: true)
+    if (data.done === true) {
+      if (loadTimeout) clearTimeout(loadTimeout);
+      scheduleRender();
+    }
+  }
+
+  function closePicker() {
+    const picker = document.getElementById("app_picker");
+    if (picker) picker.classList.remove('open');
+    isPickerOpen = false;
+    currentPickerSlot = null;
+    currentPickerGrid = null;
+    pendingApps = [];
+    if (loadTimeout) clearTimeout(loadTimeout);
+  }
+
+  function openPickerForSlot(slotElement) {
+    const slotId = slotElement.dataset.slot;
+    if (!slotId) return;
+    
+    currentPickerSlot = slotId;
+    const picker = document.getElementById("app_picker");
+    currentPickerGrid = document.getElementById("app-picker-grid");
+    
+    if (!picker || !currentPickerGrid) return;
+    
+    isPickerOpen = true;
+    pendingApps = [];
+    currentPickerGrid.innerHTML = '<div style="grid-column:1/-1;padding:20px;text-align:center;">Загрузка приложений...</div>';
+    picker.classList.add('open');
+
+    // Запускаем запрос каталога
+    if (window.androidApi && typeof window.androidApi.requestLauncherCatalogAsync === 'function') {
+      const reqId = 'app_cat_' + Date.now();
+      window.androidApi.requestLauncherCatalogAsync(TOKEN, reqId);
+    } else if (window.android && typeof android.getUserApps === 'function') {
+      // Fallback для старых мостов
+      try {
+        const raw = android.getUserApps();
+        const apps = JSON.parse(raw);
+        if (Array.isArray(apps)) {
+          pendingApps = apps;
+        }
+      } catch (e) {}
+      scheduleRender();
+    }
+
+    // Защитный таймаут: если "done" не пришел за 2 секунды, показываем то, что есть
+    if (loadTimeout) clearTimeout(loadTimeout);
+    loadTimeout = setTimeout(() => {
+      if (pendingApps.length === 0) {
+        currentPickerGrid.innerHTML = '<div style="grid-column:1/-1;padding:20px;text-align:center;">Нет установленных приложений</div>';
+      }
+    }, 2000);
   }
 
   function renderSlot(slotElement) {
@@ -250,16 +289,14 @@ modules.apps = (function() {
       close.parentNode.replaceChild(newClose, close);
       newClose.addEventListener('click', (e) => {
         e.stopPropagation();
-        picker.classList.remove('open');
-        currentPickerSlot = null;
+        closePicker();
       });
     }
     
     if (picker) {
       picker.addEventListener('click', (e) => {
         if (e.target === picker) {
-          picker.classList.remove('open');
-          currentPickerSlot = null;
+          closePicker();
         }
       });
     }
@@ -280,6 +317,7 @@ modules.apps = (function() {
     init,
     reinitSlots,
     updateAppLabels,
-    renderSlot
+    renderSlot,
+    handleLauncherCatalog // Экспортируем для main.js
   };
 })();

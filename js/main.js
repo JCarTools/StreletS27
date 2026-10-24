@@ -1,7 +1,7 @@
 /**********************************************
  * My Black Window - Dashboard
+ * [FIX] Проброс launcherCatalog в apps.js.
  * [FIX] Прелоадер скрывается максимум через 1.5 сек.
- *       Тяжелые модули догружаются в фоне.
  **********************************************/
 
 let originalOnAndroidEvent = window.onAndroidEvent;
@@ -19,6 +19,8 @@ window.onAndroidEvent = function(type, data) {
   } else if (type === "volumeChanged") {
     if (modules.volume) modules.volume.handleVolumeFromSystem(data);
     if (modules.player) modules.player.handleVolumeFromSystem(data);
+  } else if (type === "launcherCatalog") {
+    if (modules.apps) modules.apps.handleLauncherCatalog(data);
   }
   if (originalOnAndroidEvent && typeof originalOnAndroidEvent === 'function') {
     try { originalOnAndroidEvent(type, data); } catch (e) { /* noop */ }
