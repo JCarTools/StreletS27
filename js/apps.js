@@ -1,124 +1,11 @@
 /**********************************************
  * Модуль: Приложения
- * [FIX] Возврат к оригинальной структуре вставки <img> (как в v2.1).
+ * [FIX] Возврат к оригинальному алгоритму из v2.1:
+ *       получение через android.getUserApps() и жесткий base64.
  **********************************************/
 
 modules.apps = (function() {
   let currentPickerSlot = null;
-  let currentPickerGrid = null;
-  let pendingApps = [];
-  let isPickerOpen = false;
-  let loadTimeout = null;
-  let renderPending = false;
-
-  function scheduleRender() {
-    if (renderPending) return;
-    renderPending = true;
-    requestAnimationFrame(() => {
-      renderPending = false;
-      renderAppsInGrid();
-    });
-  }
-
-  function renderAppsInGrid() {
-    if (!currentPickerGrid) return;
-    
-    if (pendingApps.length === 0) {
-      currentPickerGrid.innerHTML = '<div style="grid-column:1/-1;padding:20px;text-align:center;">Нет установленных приложений</div>';
-      return;
-    }
-    
-    const fragment = document.createDocumentFragment();
-    
-    pendingApps.forEach(app => {
-      if (!app) return;
-      const d = document.createElement('div');
-      d.className = 'picker-item';
-
-      // Формируем иконку ровно как в старом рабочем коде
-      let imgSrc = 'icons/Default.svg';
-      if (app.icon) {
-        imgSrc = `data:image/png;base64,${app.icon}`;
-      }
-
-      const name = app.name || app.label || app.package || 'Приложение';
-
-      d.innerHTML = `
-        <img src="${imgSrc}">
-        <span>${name}</span>
-      `;
-
-      d.onclick = () => {
-        if (!currentPickerSlot) return;
-        
-        storage.save(`app_slot_${currentPickerSlot}`, {
-          package: app.package || app.packageName,
-          name: name,
-          icon: app.icon
-        });
-
-        const slotEl = document.querySelector(`.app_slot[data-slot="${currentPickerSlot}"]`);
-        if (slotEl) {
-          slotEl.setAttribute('data-app-name', name);
-          
-          let slotImgSrc = 'icons/Default.svg';
-          if (app.icon) {
-            slotImgSrc = `data:image/png;base64,${app.icon}`;
-          }
-          
-          slotEl.innerHTML = `<img src="${slotImgSrc}">`;
-          
-          const showLabels = storage.load('setting_showAppLabels');
-          if (showLabels) {
-            const labelSpan = document.createElement('span');
-            labelSpan.className = 'app-label';
-            labelSpan.textContent = name;
-            slotEl.appendChild(labelSpan);
-            slotEl.classList.add('has-label');
-          }
-        }
-
-        closePicker();
-      };
-
-      fragment.appendChild(d);
-    });
-    
-    currentPickerGrid.innerHTML = '';
-    currentPickerGrid.appendChild(fragment);
-  }
-
-  function handleLauncherCatalog(raw) {
-    if (!isPickerOpen) return;
-
-    let data = typeof raw === 'string' ? JSON.parse(raw) : raw;
-    if (!data) return;
-
-    if (data.section === 'apps' && Array.isArray(data.items)) {
-      data.items.forEach(newApp => {
-        const pkg = newApp.package || newApp.packageName;
-        if (!pendingApps.find(existing => (existing.package || existing.packageName) === pkg)) {
-          pendingApps.push(newApp);
-        }
-      });
-      scheduleRender();
-    }
-
-    if (data.done === true) {
-      if (loadTimeout) clearTimeout(loadTimeout);
-      scheduleRender();
-    }
-  }
-
-  function closePicker() {
-    const picker = document.getElementById("app_picker");
-    if (picker) picker.classList.remove("open");
-    isPickerOpen = false;
-    currentPickerSlot = null;
-    currentPickerGrid = null;
-    pendingApps = [];
-    if (loadTimeout) clearTimeout(loadTimeout);
-  }
 
   function openPickerForSlot(slotElement) {
     const slotId = slotElement.dataset.slot;
@@ -126,35 +13,74 @@ modules.apps = (function() {
     
     currentPickerSlot = slotId;
     const picker = document.getElementById("app_picker");
-    currentPickerGrid = document.getElementById("app-picker-grid");
+    const grid = document.getElementById("app-picker-grid");
     
-    if (!picker || !currentPickerGrid) return;
+    if (!picker || !grid) return;
     
-    isPickerOpen = true;
-    pendingApps = [];
-    currentPickerGrid.innerHTML = '<div style="grid-column:1/-1;padding:20px;text-align:center;">Загрузка приложений...</div>';
+    grid.innerHTML = '<div style="grid-column:1/-1;padding:20px;text-align:center;">Загрузка приложений...</div>';
     picker.classList.add('open');
-
-    if (window.androidApi && typeof window.androidApi.requestLauncherCatalogAsync === 'function') {
-      const reqId = 'app_cat_' + Date.now();
-      window.androidApi.requestLauncherCatalogAsync(TOKEN, reqId);
-    } else if (window.android && typeof android.getUserApps === 'function') {
+    
+    setTimeout(() => {
+      grid.innerHTML = '';
+      let apps = [];
       try {
-        const raw = android.getUserApps();
-        const apps = JSON.parse(raw);
-        if (Array.isArray(apps)) {
-          pendingApps = apps;
-        }
-      } catch (e) {}
-      scheduleRender();
-    }
-
-    if (loadTimeout) clearTimeout(loadTimeout);
-    loadTimeout = setTimeout(() => {
-      if (pendingApps.length === 0) {
-        currentPickerGrid.innerHTML = '<div style="grid-column:1/-1;padding:20px;text-align:center;">Нет установленных приложений</div>';
+        // ТОЧНО КАК В ПЕРВОЙ ВЕРСИИ
+        const appsRaw = android.getUserApps();
+        apps = JSON.parse(appsRaw);
+      } catch (e) {
+        console.error('[Apps] Ошибка получения приложений:', e);
+        apps = [];
       }
-    }, 2000);
+      
+      if (!apps || !apps.length) {
+        grid.innerHTML = '<div style="grid-column:1/-1;padding:20px;text-align:center;">Нет установленных приложений</div>';
+        return;
+      }
+      
+      apps.forEach(app => {
+        const d = document.createElement('div');
+        d.className = 'picker-item';
+        
+        const img = document.createElement('img');
+        // ТОЧНО КАК В ПЕРВОЙ ВЕРСИИ
+        img.src = `data:image/png;base64,${app.icon}`;
+        
+        const nameSpan = document.createElement('span');
+        nameSpan.textContent = app.name;
+        
+        d.appendChild(img);
+        d.appendChild(nameSpan);
+        
+        d.onclick = () => {
+          storage.save(`app_slot_${currentPickerSlot}`, {
+            package: app.package,
+            name: app.name,
+            icon: app.icon
+          });
+          
+          const slotEl = document.querySelector(`.app_slot[data-slot="${currentPickerSlot}"]`);
+          if (slotEl) {
+            slotEl.setAttribute('data-app-name', app.name);
+            // ТОЧНО КАК В ПЕРВОЙ ВЕРСИИ
+            slotEl.innerHTML = `<img src="data:image/png;base64,${app.icon}">`;
+            
+            const showLabels = storage.load('setting_showAppLabels');
+            if (showLabels) {
+              const labelSpan = document.createElement('span');
+              labelSpan.className = 'app-label';
+              labelSpan.textContent = app.name;
+              slotEl.appendChild(labelSpan);
+              slotEl.classList.add('has-label');
+            }
+          }
+          
+          picker.classList.remove('open');
+          currentPickerSlot = null;
+        };
+        
+        grid.appendChild(d);
+      });
+    }, 10);
   }
 
   function renderSlot(slotElement) {
@@ -167,19 +93,15 @@ modules.apps = (function() {
       return;
     }
     
-    let imgSrc = 'icons/Default.svg';
-    if (saved.icon) {
-      imgSrc = `data:image/png;base64,${saved.icon}`;
-    }
-
-    slotElement.innerHTML = `<img src="${imgSrc}">`;
-    slotElement.setAttribute('data-app-name', saved.name || '');
+    // ТОЧНО КАК В ПЕРВОЙ ВЕРСИИ
+    slotElement.innerHTML = `<img src="data:image/png;base64,${saved.icon}">`;
+    slotElement.setAttribute('data-app-name', saved.name);
     
     const showLabels = storage.load('setting_showAppLabels');
     if (showLabels) {
       const labelSpan = document.createElement('span');
       labelSpan.className = 'app-label';
-      labelSpan.textContent = saved.name || '';
+      labelSpan.textContent = saved.name;
       slotElement.appendChild(labelSpan);
       slotElement.classList.add('has-label');
     } else {
@@ -193,6 +115,7 @@ modules.apps = (function() {
 
   function initSlots() {
     const slots = document.querySelectorAll('.app_slot');
+    
     slots.forEach(slot => {
       const slotId = slot.dataset.slot;
       
@@ -219,7 +142,9 @@ modules.apps = (function() {
               android.runApp(saved.package);
             } catch(e) {
               console.error('[Apps] Ошибка запуска:', e);
-              if (typeof showToast === 'function') showToast('Не удалось запустить приложение', 2000);
+              if (typeof showToast === 'function') {
+                showToast('Не удалось запустить приложение', 2000);
+              }
             }
           }
         }
@@ -235,10 +160,6 @@ modules.apps = (function() {
       slot.addEventListener('click', clickHandler);
       makeLongPressable(slot, longPressHandler, { delay: 700, preventDefaultOnStart: false });
     });
-
-    if (typeof attachOemTouchFeedback === 'function') {
-      attachOemTouchFeedback('.app_slot');
-    }
   }
 
   function reinitSlots() {
@@ -258,7 +179,7 @@ modules.apps = (function() {
         if (!slot.querySelector('.app-label')) {
           const labelSpan = document.createElement('span');
           labelSpan.className = 'app-label';
-          labelSpan.textContent = saved.name || '';
+          labelSpan.textContent = saved.name;
           slot.appendChild(labelSpan);
           slot.classList.add('has-label');
         }
@@ -279,14 +200,16 @@ modules.apps = (function() {
       close.parentNode.replaceChild(newClose, close);
       newClose.addEventListener('click', (e) => {
         e.stopPropagation();
-        closePicker();
+        picker.classList.remove('open');
+        currentPickerSlot = null;
       });
     }
     
     if (picker) {
       picker.addEventListener('click', (e) => {
         if (e.target === picker) {
-          closePicker();
+          picker.classList.remove('open');
+          currentPickerSlot = null;
         }
       });
     }
@@ -307,7 +230,6 @@ modules.apps = (function() {
     init,
     reinitSlots,
     updateAppLabels,
-    renderSlot,
-    handleLauncherCatalog
+    renderSlot
   };
 })();
