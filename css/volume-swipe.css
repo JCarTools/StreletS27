@@ -1,7 +1,7 @@
 /* ============================================
    Управление громкостью через свайп
    Свайп в любой области экрана (кроме виджетов)
-   Индикатор полностью удалён
+   [UX] Индикатор громкости при свайпе
    ============================================ */
 
 /* Ripple эффект при начале свайпа */
@@ -25,6 +25,75 @@
   pointer-events: none;
   z-index: 10000;
   animation: swipeRippleLarge 0.5s ease-out forwards;
+}
+
+/* [UX] Индикатор громкости при свайпе */
+.volume-indicator {
+  position: fixed;
+  top: 2rem;
+  left: 50%;
+  transform: translateX(-50%) translateY(-12px);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 1rem;
+  border-radius: 1rem;
+  background: linear-gradient(180deg, rgba(24, 27, 34, 0.94), rgba(16, 19, 25, 0.88));
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  z-index: 10002;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.25s ease, transform 0.25s ease, visibility 0.25s ease;
+  min-width: 180px;
+}
+.volume-indicator.visible {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+}
+.volume-indicator__bar {
+  position: relative;
+  flex: 1;
+  height: 0.35rem;
+  background: linear-gradient(90deg, rgba(88, 96, 115, 0.5), rgba(65, 71, 90, 0.7));
+  border-radius: 999px;
+  overflow: hidden;
+}
+.volume-indicator__fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  background: linear-gradient(90deg, rgba(100, 150, 255, 0.95), rgba(70, 110, 200, 0.9));
+  border-radius: inherit;
+  box-shadow: 0 0 8px rgba(100, 150, 255, 0.5);
+  transition: width 0.08s linear;
+}
+.volume-indicator__value {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: rgba(212, 219, 229, 0.95);
+  min-width: 3rem;
+  text-align: right;
+  font-family: monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+body.light .volume-indicator {
+  background: linear-gradient(180deg, rgba(240, 243, 250, 0.96), rgba(225, 230, 240, 0.92));
+  border-color: rgba(88, 102, 134, 0.15);
+}
+body.light .volume-indicator__bar {
+  background: linear-gradient(90deg, rgba(116, 130, 162, 0.3), rgba(149, 160, 186, 0.4));
+}
+body.light .volume-indicator__fill {
+  background: linear-gradient(90deg, rgba(70, 110, 200, 0.9), rgba(50, 80, 150, 0.85));
+}
+body.light .volume-indicator__value {
+  color: rgba(66, 76, 97, 0.85);
 }
 
 /* Подсказка для пользователя (несколько первых раз) */
@@ -68,8 +137,9 @@
 
 /* Off-mode: отключаем свайп */
 body.off-mode .swipe-ripple-large,
-body.off-mode .volume-hint {
-  display: none;
+body.off-mode .volume-hint,
+body.off-mode .volume-indicator {
+  display: none !important;
 }
 
 /* Адаптация для мобильных устройств */
@@ -80,5 +150,9 @@ body.off-mode .volume-hint {
     text-align: center;
     max-width: 80vw;
     padding: 0.6rem 1.2rem;
+  }
+  .volume-indicator {
+    min-width: 140px;
+    padding: 0.5rem 0.8rem;
   }
 }

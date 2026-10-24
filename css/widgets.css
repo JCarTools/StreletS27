@@ -178,7 +178,7 @@ body.light .climate_slot.active {
   position: relative;
   background: #1a1c24;
   color: #e0e0e0;
-  font-size: 2.8rem;
+  font-size: var(--clock-digit-size);
   font-weight: bold;
   padding: 0.15rem 0.25rem;
   border-radius: 0.5rem;
@@ -203,7 +203,7 @@ body.light .climate_slot.active {
 }
 
 .flip-separator {
-  font-size: 2.8rem;
+  font-size: var(--clock-digit-size);
   color: #aaa;
   margin: 0 0.1rem;
   font-family: 'FlipClock', monospace;
@@ -244,6 +244,97 @@ body.light .flip-separator {
   color: #555;
 }
 
+/* === ВИДЖЕТ-ЗАГЛУШКА: СЕТЬ (верх) / ТОПЛИВО (центр) / АКБ (низ) ===
+   По размеру как .right-buttons: ширина 4.5rem, высота var(--widget-size).
+   Три зоны распределены равномерно (space-between), симметрично как три кнопки.
+   [UX] Единицы измерения (%, л, V) соразмерны со значком сети.
+   [NEW] .widget-hidden — скрывает весь виджет, плеер расширяется. */
+.widget_placeholder {
+  width: 4.5rem;
+  min-width: 4.5rem;
+  max-width: 4.5rem;
+  height: var(--widget-size);
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.7rem 0.4rem;
+  opacity: var(--widget-opacity, 1);
+}
+
+.widget_placeholder.widget-hidden {
+  display: none !important;
+}
+
+.widget_placeholder__top,
+.widget_placeholder__center,
+.widget_placeholder__bottom {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 0;
+  flex-shrink: 0;
+}
+
+.widget_placeholder__center,
+.widget_placeholder__bottom {
+  flex-direction: row;
+  align-items: baseline;
+  gap: 0.2rem;
+}
+
+.widget_placeholder__value {
+  font-size: 1.15rem;
+  font-weight: 600;
+  line-height: 1;
+  color: rgba(244, 247, 252, 0.95);
+  font-variant-numeric: tabular-nums;
+}
+body.light .widget_placeholder__value { color: rgba(28, 35, 48, 0.92); }
+
+.widget_placeholder__unit {
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1;
+  color: rgba(191, 199, 211, 0.8);
+}
+body.light .widget_placeholder__unit { color: rgba(66, 76, 97, 0.65); }
+
+/* Сеть внутри нового виджета — статично, по центру верхней зоны */
+.widget_placeholder #btnNetwork {
+  position: static;
+  width: 1.4rem;
+  height: 1.4rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  backdrop-filter: none;
+  cursor: pointer;
+  padding: 0;
+  margin: 0;
+  opacity: 0.9;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  -webkit-tap-highlight-color: transparent;
+  pointer-events: auto;
+}
+.widget_placeholder #btnNetwork:hover { opacity: 1; transform: scale(1.06); }
+.widget_placeholder #btnNetwork:active { transform: scale(0.94); }
+.widget_placeholder #btnNetwork .network-svg {
+  width: 100%; height: 100%; display: block;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.25));
+}
+body.light .widget_placeholder #btnNetwork .network-svg {
+  filter: drop-shadow(0 1px 1px rgba(0,0,0,0.1));
+}
+body.off-mode .widget_placeholder #btnNetwork,
+body.widgets-hidden .widget_placeholder #btnNetwork { opacity: 0; pointer-events: none; }
+.widget_placeholder #btnNetwork.network-hidden { display: none !important; }
+
 /* === ПЛЕЕР (ГИБКАЯ ШИРИНА) === */
 .widget_player {
   flex: 1 1 auto;
@@ -262,36 +353,7 @@ body.light .widget_player {
   border-color: rgba(90, 102, 132, 0.08);
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.72), 0 14px 24px rgba(95, 110, 143, 0.12);
 }
-.widget_player::before {
-  content: '';
-  position: absolute;
-  inset: 0.22rem;
-  border-radius: 1.28rem;
-  border: 1px solid rgba(255,255,255,0.025);
-  pointer-events: none;
-}
-.widget_player__image {
-  width: 6.5rem;
-  height: 6.5rem;
-  border-radius: 1.15rem;
-  overflow: hidden;
-  align-self: center;
-  flex-shrink: 0;
-  position: relative;
-  box-shadow: 0 10px 24px rgba(0,0,0,0.26), inset 0 1px 0 rgba(255,255,255,0.08);
-}
-.widget_player__image::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(180deg, rgba(255,255,255,0.1), transparent 36%, rgba(0,0,0,0.16));
-  pointer-events: none;
-}
-.widget_player__image img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
+
 .widget_player__right {
   flex: 1;
   display: flex;
@@ -304,6 +366,7 @@ body.light .widget_player {
   display: flex;
   flex-direction: column;
   gap: 0.32rem;
+  padding-right: 0.2rem;
 }
 .widget_player__titles {
   min-width: 0;
@@ -556,20 +619,17 @@ body.light .widget_apps {
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.68), 0 12px 22px rgba(93, 110, 141, 0.1);
 }
 
-/* Для 2 слотов - вертикальное расположение (flex column), ширина = половина стандартного виджета */
 .widget_apps[data-count="2"] {
   display: flex;
   flex-direction: column;
 }
 
-/* Для 4 слотов - сетка 2x2, ширина = стандартная */
 .widget_apps[data-count="4"] {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   grid-template-rows: repeat(2, 1fr);
 }
 
-/* Для 6 слотов - сетка 3x2, ширина = стандартная * 1.5 */
 .widget_apps[data-count="6"] {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -620,7 +680,6 @@ body.light .app_slot {
   z-index: 1;
 }
 
-/* Названия приложений (опционально) */
 .app-label {
   font-size: 0.55rem;
   margin-top: 0.25rem;
@@ -812,17 +871,6 @@ body.light .widget_buttons.is-pressed {
   animation: oemIconRebound 250ms cubic-bezier(0.23, 1, 0.32, 1);
 }
 
-@keyframes oemTouchRebound {
-  0% { transform: scale(0.95); }
-  60% { transform: scale(1.02); }
-  100% { transform: scale(1); }
-}
-@keyframes oemIconRebound {
-  0% { transform: scale(0.92); }
-  60% { transform: scale(1.05); }
-  100% { transform: scale(1); }
-}
-
 /* Скрытие виджетов при клике (только в видео-режиме) */
 body.widgets-hidden .dashboard {
   opacity: 0;
@@ -830,7 +878,6 @@ body.widgets-hidden .dashboard {
   transition: opacity 0.3s ease;
 }
 
-body.widgets-hidden #btnNetwork,
 body.widgets-hidden #btnClose,
 body.widgets-hidden .brand-footer {
   opacity: 0;
@@ -839,7 +886,6 @@ body.widgets-hidden .brand-footer {
 }
 
 body:not(.widgets-hidden) .dashboard,
-body:not(.widgets-hidden) #btnNetwork,
 body:not(.widgets-hidden) #btnClose,
 body:not(.widgets-hidden) .brand-footer {
   opacity: 1;

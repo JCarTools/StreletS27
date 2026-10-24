@@ -1,6 +1,7 @@
 /**********************************************
  * Модуль: Управление громкостью
- * Исправлено: корректная синхронизация со свайпом
+ *  - handleVolumeFromSystem понимает объект {volume, value}
+ *  - showToast контролируется вызывающим (default = false для внешних)
  **********************************************/
 
 modules.volume = (function() {
@@ -18,19 +19,23 @@ modules.volume = (function() {
     return lastSetValue !== null && (Date.now() - lastSetTime) < ECHO_SUPPRESS_MS;
   }
 
+  function parseVolumeValue(raw) {
+    if (raw === undefined || raw === null) return null;
+    const candidate = (typeof raw === 'object') ? (raw.volume ?? raw.value) : raw;
+    const num = parseInt(candidate, 10);
+    if (isNaN(num) || num < 0 || num > 100) return null;
+    return num;
+  }
+
   function fetchVolume() {
     try {
       const raw = android.getVolume();
-      if (raw === null || raw === undefined) return currentVolume;
-
-      const newVolume = parseInt(raw, 10);
-      if (isNaN(newVolume) || newVolume < 0 || newVolume > 100) return currentVolume;
-
+      const newVolume = parseVolumeValue(raw);
+      if (newVolume === null) return currentVolume;
       if (isSuppressing() && newVolume !== lastSetValue) {
-        console.warn('[Volume] poll', newVolume, '!= last set', lastSetValue, '— ignored');
+        warn('[Volume] poll', newVolume, '!= last set', lastSetValue, '— ignored');
         return currentVolume;
       }
-
       if (newVolume !== currentVolume) {
         currentVolume = newVolume;
         notifyCallbacks(currentVolume);
@@ -42,9 +47,13 @@ modules.volume = (function() {
     return currentVolume;
   }
 
-  function setVolume(volume, showToastMsg = true) {
-    let newVolume = Math.min(100, Math.max(0, parseInt(volume, 10)));
-    if (isNaN(newVolume)) return;
+  /**
+   * @param {number} volume
+   * @param {boolean} showToastMsg — по умолчанию false, чтобы не спамить
+   */
+  function setVolume(volume, showToastMsg = false) {
+    const newVolume = parseVolumeValue(volume);
+    if (newVolume === null) return;
 
     lastSetValue = newVolume;
     lastSetTime = Date.now();
@@ -52,28 +61,16 @@ modules.volume = (function() {
     android.setVolume(newVolume);
 
     if (newVolume === currentVolume) return;
-
     currentVolume = newVolume;
 
     if (showToastMsg && typeof showToast === 'function') {
       showToast(`Громкость: ${newVolume}%`, 1500);
     }
-
     notifyCallbacks(currentVolume);
-    
-    // Дополнительно показываем индикатор, если есть модуль свайпа
-    if (modules.volumeSwipe && typeof modules.volumeSwipe.showVolumeIndicator === 'function') {
-      modules.volumeSwipe.showVolumeIndicator(currentVolume);
-    }
   }
 
-  function volumeUp(step = 5) {
-    setVolume(Math.min(100, currentVolume + step), true);
-  }
-
-  function volumeDown(step = 5) {
-    setVolume(Math.max(0, currentVolume - step), true);
-  }
+  function volumeUp(step = 5) { setVolume(Math.min(100, currentVolume + step), true); }
+  function volumeDown(step = 5) { setVolume(Math.max(0, currentVolume - step), true); }
 
   function notifyCallbacks(volume) {
     callbacks.forEach(cb => {
@@ -89,14 +86,14 @@ modules.volume = (function() {
   }
 
   function unsubscribe(callback) {
-    const index = callbacks.indexOf(callback);
-    if (index !== -1) callbacks.splice(index, 1);
+    const idx = callbacks.indexOf(callback);
+    if (idx !== -1) callbacks.splice(idx, 1);
   }
 
   function startAutoCheck(intervalMs = 30000) {
     stopAutoCheck();
     volumeCheckInterval = setInterval(fetchVolume, intervalMs);
-    console.log('[Volume] Автоопрос включён, интервал', intervalMs, 'мс');
+    log('[Volume] Автоопрос включён, интервал', intervalMs, 'мс');
   }
 
   function stopAutoCheck() {
@@ -107,33 +104,21 @@ modules.volume = (function() {
   }
 
   function handleVolumeFromSystem(volume) {
-    if (volume === undefined || volume === null) return;
-    const newVolume = parseInt(volume, 10);
-    if (isNaN(newVolume) || newVolume < 0 || newVolume > 100) return;
-
+    const newVolume = parseVolumeValue(volume);
+    if (newVolume === null) return;
     lastSetValue = null;
-
     if (newVolume !== currentVolume) {
       currentVolume = newVolume;
       notifyCallbacks(currentVolume);
-      
-      // Показываем индикатор при внешнем изменении громкости
-      if (modules.volumeSwipe && typeof modules.volumeSwipe.showVolumeIndicator === 'function') {
-        modules.volumeSwipe.showVolumeIndicator(currentVolume);
-      }
     }
   }
 
   function init() {
     if (isInitialized) return;
     isInitialized = true;
-
     fetchVolume();
-
-    // Включаем редкий опрос (раз в 30 секунд) для синхронизации
     startAutoCheck(30000);
-
-    console.log('[Volume] Модуль инициализирован, громкость:', currentVolume);
+    log('[Volume] Модуль инициализирован, громкость:', currentVolume);
   }
 
   return {

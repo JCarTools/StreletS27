@@ -1,15 +1,12 @@
 /**********************************************
- * Модуль: Плеер (ИСПРАВЛЕН)
- *
- * Что изменено:
- *   - Удалена кнопка динамика
- *   - Слайдер громкости всегда виден под кнопками управления
- *   - Убрана логика показа/скрытия слайдера через кнопку
- *   - Бегунок расположен по центру
+ * Модуль: Плеер
+ * [FIX] Пауза progressTick при document.hidden
+ * [UX] Drag прогресса пальцем/мышью
+ * [FIX] Защита от NaN в updateMusicInfo/onProgressClick
  **********************************************/
 
 modules.player = (function() {
-  // DOM элементы
+  const PLACEHOLDER_COVER = "images/img.jpg";
   const titleEl = document.querySelector(".widget_player__title");
   const artistEl = document.querySelector(".widget_player__artist");
   const imgEl = document.querySelector(".widget_player__image img");
@@ -21,10 +18,8 @@ modules.player = (function() {
   const pauseBtn = document.getElementById("player__pause");
   const trackLine = document.querySelector(".widget_player__track_line");
   const volumeSlider = document.getElementById("player__volume_slider");
-  const volumeFill = document.getElementById("player__volume_fill");
   const volumeValue = document.getElementById("player__volume_value");
 
-  // Состояние
   let isPlaying = false;
   let playStateKnown = false;
   let playStateLockUntil = 0;
@@ -36,8 +31,10 @@ modules.player = (function() {
   let positionTimestamp = 0;
   let progressTimer = null;
   let currentVolume = 50;
+  let isDraggingProgress = false;
 
   function formatTime(ms) {
+    if (!Number.isFinite(ms) || ms < 0) return "0:00";
     if (ms === Infinity || ms > 86400000) return "∞";
     const m = Math.floor(ms / 60000);
     const s = Math.floor((ms % 60000) / 1000);
@@ -45,17 +42,20 @@ modules.player = (function() {
   }
 
   function updateProgressUI(pos, dur) {
-    const percent = dur > 0 ? Math.min(pos / dur * 100, 100) : 0;
+    const safePos = Number.isFinite(pos) ? pos : 0;
+    const safeDur = Number.isFinite(dur) ? dur : 0;
+    const percent = safeDur > 0 ? Math.min(safePos / safeDur * 100, 100) : 0;
     if (progressFill) progressFill.style.width = percent + "%";
-    if (timeCurrentSpan) timeCurrentSpan.textContent = formatTime(pos);
-    if (timeDurationSpan) timeDurationSpan.textContent = formatTime(dur);
+    if (timeCurrentSpan) timeCurrentSpan.textContent = formatTime(safePos);
+    if (timeDurationSpan) timeDurationSpan.textContent = formatTime(safeDur);
   }
 
   function startProgressTick() {
     if (progressTimer) clearInterval(progressTimer);
     if (!isPlaying) return;
     progressTimer = setInterval(() => {
-      if (!isPlaying || trackDuration <= 0) return;
+      if (!isPlaying || isDraggingProgress) return;
+      if (!Number.isFinite(trackDuration) || trackDuration <= 0) return;
       const elapsed = Date.now() - positionTimestamp;
       let newPos = trackPosition + elapsed;
       if (newPos >= trackDuration) newPos = trackDuration;
@@ -64,26 +64,19 @@ modules.player = (function() {
   }
 
   function stopProgressTick() {
-    if (progressTimer) {
-      clearInterval(progressTimer);
-      progressTimer = null;
-    }
+    if (progressTimer) { clearInterval(progressTimer); progressTimer = null; }
   }
 
   function renderPlayState() {
     if (playBtn && pauseBtn) {
-      playBtn.style.display  = isPlaying ? "none" : "flex";
+      playBtn.style.display = isPlaying ? "none" : "flex";
       pauseBtn.style.display = isPlaying ? "flex" : "none";
     }
   }
 
   function applyPlayState(playing, fromUser = false) {
     if (!fromUser && Date.now() < playStateLockUntil) return;
-
-    if (playing === isPlaying) {
-      renderPlayState();
-      return;
-    }
+    if (playing === isPlaying) { renderPlayState(); return; }
     isPlaying = playing;
     renderPlayState();
     if (isPlaying) startProgressTick();
@@ -92,56 +85,116 @@ modules.player = (function() {
 
   function onPlayPauseClick(e) {
     e?.stopPropagation?.();
-
     if (PLAYPAUSE_TOGGLE_CMD) {
       if (typeof android.runEnum === 'function') android.runEnum(PLAYPAUSE_TOGGLE_CMD);
     } else {
       const cmd = isPlaying ? "MEDIA_PAUSE" : "MEDIA_PLAY";
       if (typeof android.runEnum === 'function') android.runEnum(cmd);
     }
-
     playStateLockUntil = Date.now() + PLAYSTATE_ECHO_MS;
     applyPlayState(!isPlaying, true);
-
     if (!playStateKnown) android.requestMusicState();
   }
 
+  function seekToClientX(clientX) {
+    if (!Number.isFinite(trackDuration) || trackDuration <= 0) return;
+    if (!trackLine) return;
+    const rect = trackLine.getBoundingClientRect();
+    if (rect.width <= 0) return;
+    let percent = (clientX - rect.left) / rect.width;
+    percent = Math.min(1, Math.max(0, percent));
+    const newPos = Math.floor(percent * trackDuration);
+    if (!Number.isFinite(newPos)) return;
+    trackPosition = newPos;
+    positionTimestamp = Date.now();
+    updateProgressUI(newPos, trackDuration);
+    return newPos;
+  }
+
   function onProgressClick(e) {
-    if (trackDuration <= 0) return;
+    if (!Number.isFinite(trackDuration) || trackDuration <= 0) return;
+    if (!trackLine) return;
     let clientX;
     if (e.touches) {
+      if (!e.touches[0]) return;
       clientX = e.touches[0].clientX;
       e.preventDefault();
     } else {
       clientX = e.clientX;
     }
-    const rect = trackLine.getBoundingClientRect();
-    let percent = (clientX - rect.left) / rect.width;
-    percent = Math.min(1, Math.max(0, percent));
-    const newPos = Math.floor(percent * trackDuration);
+    const newPos = seekToClientX(clientX);
+    if (newPos === undefined) return;
     if (typeof android.runEnum === 'function') android.runEnum("MEDIA_SEEK_" + newPos);
-    trackPosition = newPos;
-    positionTimestamp = Date.now();
-    updateProgressUI(newPos, trackDuration);
+  }
+
+  // [UX] Drag прогресса
+  function initProgressDrag() {
+    if (!trackLine) return;
+    let active = false;
+
+    const apply = (e) => {
+      const clientX = e.touches ? e.touches[0]?.clientX : e.clientX;
+      if (clientX === undefined) return;
+      seekToClientX(clientX);
+    };
+
+    const start = (e) => {
+      if (!Number.isFinite(trackDuration) || trackDuration <= 0) return;
+      const clientX = e.touches ? e.touches[0]?.clientX : e.clientX;
+      if (clientX === undefined) return;
+      const rect = trackLine.getBoundingClientRect();
+      if (rect.width <= 0) return;
+      // Начинаем drag только если попали в линию
+      active = true;
+      isDraggingProgress = true;
+      apply(e);
+      if (e.cancelable) e.preventDefault();
+    };
+
+    const move = (e) => {
+      if (!active) return;
+      if (e.cancelable) e.preventDefault();
+      apply(e);
+    };
+
+    const end = (e) => {
+      if (!active) return;
+      active = false;
+      isDraggingProgress = false;
+      const clientX = e.changedTouches ? e.changedTouches[0]?.clientX : e.clientX;
+      if (clientX !== undefined) {
+        const newPos = seekToClientX(clientX);
+        if (newPos !== undefined && typeof android.runEnum === 'function') {
+          android.runEnum("MEDIA_SEEK_" + newPos);
+        }
+      }
+    };
+
+    trackLine.addEventListener('mousedown', start);
+    trackLine.addEventListener('touchstart', start, { passive: false });
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', end);
+    window.addEventListener('touchmove', move, { passive: false });
+    window.addEventListener('touchend', end);
+    window.addEventListener('touchcancel', end);
   }
 
   // === ГРОМКОСТЬ ===
   function updateVolumeUI(percent) {
-    percent = Math.min(100, Math.max(0, parseInt(percent, 10)));
-    if (isNaN(percent)) return;
-    if (volumeFill) volumeFill.style.width = percent + "%";
-    if (volumeValue) volumeValue.textContent = percent + "%";
-    currentVolume = percent;
+    const safe = Math.min(100, Math.max(0, parseInt(percent, 10)));
+    if (isNaN(safe)) return;
+    const volumeFill = document.getElementById("player__volume_fill");
+    if (volumeFill) volumeFill.style.width = safe + "%";
+    if (volumeValue) volumeValue.textContent = safe + "%";
+    currentVolume = safe;
   }
 
-  function setVolume(volume) {
-    let vol = Math.min(100, Math.max(0, parseInt(volume, 10)));
+  function setVolume(volume, showToast = false) {
+    const vol = Math.min(100, Math.max(0, parseInt(volume, 10)));
     if (isNaN(vol)) return;
-
     updateVolumeUI(vol);
-
     if (modules.volume && typeof modules.volume.setVolume === 'function') {
-      modules.volume.setVolume(vol, true);
+      modules.volume.setVolume(vol, showToast);
     } else {
       android.setVolume(vol);
     }
@@ -150,36 +203,30 @@ modules.player = (function() {
   function onVolumeLineClick(e) {
     e.stopPropagation();
     e.preventDefault();
-
-    let clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientX = e.touches ? e.touches[0]?.clientX : e.clientX;
     if (clientX === undefined) return;
-
     const volumeLine = volumeSlider.querySelector('.widget_player__volume_line');
     if (!volumeLine) return;
-
     const rect = volumeLine.getBoundingClientRect();
     if (rect.width <= 0) return;
-
     let percent = (clientX - rect.left) / rect.width;
     percent = Math.min(1, Math.max(0, percent));
-    const newVolume = Math.round(percent * 100);
-    setVolume(newVolume);
+    setVolume(Math.round(percent * 100), false);
   }
 
   function initVolumeSliderDrag(volumeLine) {
     const volumeDot = volumeSlider.querySelector('.widget_player__volume_dot');
     if (!volumeDot) return;
-
     let isDragging = false;
 
     const applyFromEvent = (e) => {
-      let clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientX = e.touches ? e.touches[0]?.clientX : e.clientX;
       if (clientX === undefined) return;
       const rect = volumeLine.getBoundingClientRect();
       if (rect.width <= 0) return;
       let percent = (clientX - rect.left) / rect.width;
       percent = Math.min(1, Math.max(0, percent));
-      setVolume(Math.round(percent * 100));
+      setVolume(Math.round(percent * 100), false);
     };
 
     const startDrag = (e) => {
@@ -187,16 +234,12 @@ modules.player = (function() {
       e.preventDefault();
       isDragging = true;
     };
-
     const onDrag = (e) => {
       if (!isDragging) return;
       e.preventDefault();
       applyFromEvent(e);
     };
-
-    const stopDrag = () => {
-      isDragging = false;
-    };
+    const stopDrag = () => { isDragging = false; };
 
     volumeDot.addEventListener('mousedown', startDrag);
     volumeDot.addEventListener('touchstart', startDrag, { passive: false });
@@ -209,46 +252,62 @@ modules.player = (function() {
 
   function initVolumeSlider() {
     if (!volumeSlider) return;
-
     const volumeLine = volumeSlider.querySelector('.widget_player__volume_line');
     if (!volumeLine) return;
-
     volumeLine.addEventListener('click', onVolumeLineClick);
     volumeLine.addEventListener('touchstart', onVolumeLineClick, { passive: false });
     initVolumeSliderDrag(volumeLine);
 
-    // Начальная громкость из единого модуля
     let sysVolume = 50;
     try {
       if (modules.volume && typeof modules.volume.getVolume === 'function') {
         sysVolume = modules.volume.getVolume();
       }
-    } catch (e) {}
+    } catch (e) { /* noop */ }
     updateVolumeUI(sysVolume);
   }
 
   function handleVolumeFromSystem(volume) {
     if (volume === undefined || volume === null) return;
-    const vol = parseInt(volume, 10);
+    const raw = (typeof volume === 'object') ? (volume.volume ?? volume.value) : volume;
+    const vol = parseInt(raw, 10);
     if (!isNaN(vol) && vol >= 0 && vol <= 100 && vol !== currentVolume) {
       updateVolumeUI(vol);
     }
   }
 
-  function updateMusicInfo(data) {
-    if (typeof data === "string") data = JSON.parse(data);
+  function updateMusicInfo(rawData) {
+    let data = rawData;
+    try {
+      if (typeof data === "string") data = JSON.parse(data);
+    } catch (e) {
+      console.warn('[Player] updateMusicInfo: JSON parse error', e);
+      return;
+    }
+    if (!data || typeof data !== 'object') return;
+
     if (titleEl) titleEl.textContent = data.SongName || "—";
     if (artistEl) artistEl.textContent = data.SongArtist || "";
-    if (imgEl && data.SongAlbumPicture) imgEl.src = "data:image/png;base64," + data.SongAlbumPicture;
+    if (imgEl) {
+      if (data.SongAlbumPicture) {
+        imgEl.src = "data:image/png;base64," + data.SongAlbumPicture;
+      } else {
+        imgEl.src = PLACEHOLDER_COVER;
+      }
+    }
 
-    let dur = parseFloat(data.Trdur) || 0;
-    let pos = parseFloat(data.Trpos) || 0;
+    let dur = parseFloat(data.Trdur);
+    let pos = parseFloat(data.Trpos);
+    if (!Number.isFinite(dur)) dur = 0;
+    if (!Number.isFinite(pos)) pos = 0;
     if (dur < 1000 && dur > 0) dur *= 1000;
     if (pos < 1000 && pos > 0) pos *= 1000;
     trackDuration = dur;
-    trackPosition = Math.min(pos, trackDuration);
+    trackPosition = Math.min(pos, trackDuration || pos);
     positionTimestamp = Date.now();
-    updateProgressUI(trackPosition, trackDuration);
+    if (!isDraggingProgress) {
+      updateProgressUI(trackPosition, trackDuration);
+    }
 
     let newPlaying;
     if (data.IsPlaying !== undefined) {
@@ -268,16 +327,22 @@ modules.player = (function() {
     }
   }
 
+  let isInitialized = false;
+
   function init() {
+    if (isInitialized) return;
+    isInitialized = true;
+
     document.getElementById("player__prev")?.addEventListener("click", () => android.runEnum("MEDIA_BLACK"));
     document.getElementById("player__next")?.addEventListener("click", () => android.runEnum("MEDIA_NEXT"));
     if (playBtn) playBtn.addEventListener("click", onPlayPauseClick);
     if (pauseBtn) pauseBtn.addEventListener("click", onPlayPauseClick);
     if (trackLine) {
       trackLine.addEventListener("click", onProgressClick);
-      trackLine.addEventListener("touchstart", onProgressClick);
+      initProgressDrag();
     }
     initVolumeSlider();
+
     if (modules.volume && modules.volume.subscribe) {
       modules.volume.subscribe(handleVolumeFromSystem);
     }
@@ -285,6 +350,15 @@ modules.player = (function() {
     android.requestMusicState();
     setTimeout(() => { if (!playStateKnown) android.requestMusicState(); }, 400);
     setTimeout(() => { if (!playStateKnown) android.requestMusicState(); }, 1200);
+
+    // [FIX] Пауза progressTick при document.hidden
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        stopProgressTick();
+      } else if (isPlaying) {
+        startProgressTick();
+      }
+    });
   }
 
   return { updateMusicInfo, init, handleVolumeFromSystem };

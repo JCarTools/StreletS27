@@ -3,8 +3,9 @@
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta charset="utf-8">
+<meta name="theme-color" content="#0F0D13">
 <title>My Black Window</title>
-<!-- Стили -->
+<link rel="manifest" href="manifest.json">
 <link rel="stylesheet" href="css/base.css">
 <link rel="stylesheet" href="css/widgets.css">
 <link rel="stylesheet" href="css/off-mode.css">
@@ -13,90 +14,48 @@
 <link rel="stylesheet" href="css/custom.css">
 <link rel="stylesheet" href="css/settings.css">
 <link rel="stylesheet" href="css/volume-swipe.css">
-
-<!-- Стиль для скрытия контента до загрузки -->
 <style>
-  /* Скрываем всё содержимое до загрузки */
-  #app-content {
-    opacity: 0;
-    visibility: hidden;
-    transition: opacity 0.3s ease, visibility 0.3s ease;
-  }
-  
-  #app-content.ready {
-    opacity: 1;
-    visibility: visible;
-  }
-  
-  /* Полноэкранный прелоадер */
+  html, body { overscroll-behavior: none; }
+  #app-content { opacity: 0; visibility: hidden; transition: opacity 0.3s ease, visibility 0.3s ease; }
+  #app-content.ready { opacity: 1; visibility: visible; }
   #startup-preloader {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: #0F0D13;
-    z-index: 100000;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-direction: column;
-    gap: 1rem;
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: #0F0D13; z-index: 100000;
+    display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 1rem;
     transition: opacity 0.5s ease, visibility 0.5s ease;
   }
-  
-  #startup-preloader.hide {
-    opacity: 0;
-    visibility: hidden;
-  }
-  
+  #startup-preloader.hide { opacity: 0; visibility: hidden; }
   .preloader-spinner {
-    width: 3rem;
-    height: 3rem;
-    border: 0.3rem solid rgba(255,255,255,0.2);
-    border-top-color: rgba(255,255,255,0.9);
-    border-radius: 50%;
-    animation: preloaderSpin 0.8s linear infinite;
+    width: 3rem; height: 3rem;
+    border: 0.3rem solid rgba(255,255,255,0.2); border-top-color: rgba(255,255,255,0.9);
+    border-radius: 50%; animation: preloaderSpin 0.8s linear infinite;
   }
-  
-  @keyframes preloaderSpin {
-    to { transform: rotate(360deg); }
-  }
-  
-  .preloader-text {
-    color: rgba(255,255,255,0.7);
-    font-size: 0.85rem;
-    letter-spacing: 0.1em;
-    font-family: monospace;
-  }
+  @keyframes preloaderSpin { to { transform: rotate(360deg); } }
+  .preloader-text { color: rgba(255,255,255,0.7); font-size: 0.85rem; letter-spacing: 0.1em; font-family: monospace; }
 </style>
 </head>
 <body>
 
-<!-- Стартовый прелоадер -->
+<!-- ============================================================
+     Зеркало manifest.json — версия доступна синхронно как
+     window.MANIFEST.version ещё ДО загрузки остальных скриптов.
+     Работает на file:// в Android WebView без XHR/fetch.
+     ============================================================ -->
+<script src="manifest.js"></script>
+
 <div id="startup-preloader">
   <div class="preloader-spinner"></div>
   <div class="preloader-text">ЗАГРУЗКА ПАНЕЛИ...</div>
 </div>
 
-<!-- Основной контент, скрытый до загрузки -->
 <div id="app-content">
-  <!-- Сеть -->
-  <div id="btnNetwork" title="Статус подключения (можно перетаскивать)">
-    <span class="system-fab__halo" aria-hidden="true"></span>
-    <span id="networkIconContainer"></span>
-  </div>
-
-  <!-- Крестик -->
   <div id="btnClose" title="Закрыть">
     <span class="system-fab__halo" aria-hidden="true"></span>
     <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M8 8l8 8M16 8l-8 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
   </div>
 
-  <!-- Редактируемая надпись -->
   <div class="brand-footer" id="editableBrand">ТенеТ Т8 Вместе к новым свершениям ТенеТ Т8</div>
 
-  <!-- Модальное окно редактирования -->
   <div class="modal-overlay" id="brandEditorModal">
     <div class="modal-content">
       <h3>Редактировать надпись</h3>
@@ -108,7 +67,6 @@
     </div>
   </div>
 
-  <!-- Шторка обоев -->
   <div id="sidebar" class="sidebar">
     <div class="sidebar__topbar">
       <div>
@@ -145,9 +103,7 @@
     </div>
   </div>
 
-  <!-- Основная панель -->
   <div class="dashboard">
-    <!-- Климат (2x3) -->
     <div class="widget_climate widget widget_climate_2x3">
       <div class="climate-grid climate-grid_2x3">
         <div class="climate_slot" data-climate-slot="1"></div>
@@ -162,64 +118,75 @@
       </div>
     </div>
 
-    <!-- Время -->
     <div class="widget_time widget">
       <div class="flip-clock" id="flipClock"></div>
       <div class="widget_time__date" id="dateDisplay"></div>
       <div class="widget_time__weekday" id="weekdayDisplay"></div>
-      <div class="widget_time__signature">@Strelets27 v.2.1</div>
+      <div class="widget_time__signature">@Strelets27</div>
     </div>
 
-    <!-- Плеер (с громкостью) -->
-<div class="widget_player widget">
-  <div class="widget_player__image"><img src="images/img.jpg" alt="Обложка"></div>
-  <div class="widget_player__right">
-    <div class="widget_player__top">
-      <div class="widget_player__titles">
-        <div class="widget_player__title">Название песни</div>
-        <div class="widget_player__artist">Имя артиста</div>
-      </div>
-    </div>
-    <div class="widget_player__track_row">
-      <div class="widget_player__track_line">
-        <div class="widget_player__track_progress" style="width:0%"><div class="widget_player__track_dot"></div></div>
-      </div>
-      <div class="widget_player__track_time"><span>00:00</span> / <span>00:00</span></div>
-    </div>
-    <div class="widget_player__buttons" aria-label="Управление воспроизведением">
-      <button id="player__prev" class="widget_player__prev widget_player__btn" type="button" aria-label="Назад">
-        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 6v12M18 7l-8 5 8 5V7z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </button>
-      <button id="player__play" class="widget_player__play widget_player__btn widget_player__btn--primary" type="button" aria-label="Воспроизвести">
-        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 7.5v9l7-4.5-7-4.5z" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </button>
-      <button id="player__pause" class="widget_player__play widget_player__btn widget_player__btn--primary" type="button" aria-label="Пауза" style="display:none">
-        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9.5 7.5v9M14.5 7.5v9" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>
-      </button>
-      <button id="player__next" class="widget_player__next widget_player__btn" type="button" aria-label="Вперёд">
-        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M18 6v12M6 7l8 5-8 5V7z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </button>
-    </div>
-    <div class="widget_player__volume_slider" id="player__volume_slider">
-      <div class="widget_player__volume_line">
-        <div class="widget_player__volume_fill" id="player__volume_fill" style="width: 50%">
-          <div class="widget_player__volume_dot"></div>
+    <div class="widget_placeholder widget" id="widgetPlaceholder">
+      <div class="widget_placeholder__top">
+        <div id="btnNetwork" title="Статус подключения" aria-label="Статус подключения">
+          <span id="networkIconContainer"></span>
         </div>
       </div>
-      <span class="widget_player__volume_value" id="player__volume_value">50%</span>
+      <div class="widget_placeholder__center">
+        <span class="widget_placeholder__value" id="fuelValue">—</span>
+        <span class="widget_placeholder__unit" id="fuelUnit">%</span>
+      </div>
+      <div class="widget_placeholder__bottom">
+        <span class="widget_placeholder__value" id="batteryValue">—</span>
+        <span class="widget_placeholder__unit">V</span>
+      </div>
     </div>
-  </div>
-</div>
 
-<!-- Приложения -->
-<div class="widget_apps widget" data-count="4">
-  <div class="app_slot" data-slot="1"></div>
-  <div class="app_slot" data-slot="2"></div>
-  <div class="app_slot" data-slot="3"></div>
-  <div class="app_slot" data-slot="4"></div>
-</div>
+    <div class="widget_player widget">
+      <div class="widget_player__right">
+        <div class="widget_player__top">
+          <div class="widget_player__titles">
+            <div class="widget_player__title">Название песни</div>
+            <div class="widget_player__artist">Имя артиста</div>
+          </div>
+        </div>
+        <div class="widget_player__track_row">
+          <div class="widget_player__track_line">
+            <div class="widget_player__track_progress" style="width:0%"><div class="widget_player__track_dot"></div></div>
+          </div>
+          <div class="widget_player__track_time"><span>00:00</span> / <span>00:00</span></div>
+        </div>
+        <div class="widget_player__buttons" aria-label="Управление воспроизведением">
+          <button id="player__prev" class="widget_player__prev widget_player__btn" type="button" aria-label="Назад">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 6v12M18 7l-8 5 8 5V7z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <button id="player__play" class="widget_player__play widget_player__btn widget_player__btn--primary" type="button" aria-label="Воспроизвести">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 7.5v9l7-4.5-7-4.5z" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <button id="player__pause" class="widget_player__play widget_player__btn widget_player__btn--primary" type="button" aria-label="Пауза" style="display:none">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9.5 7.5v9M14.5 7.5v9" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>
+          </button>
+          <button id="player__next" class="widget_player__next widget_player__btn" type="button" aria-label="Вперёд">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M18 6v12M6 7l8 5-8 5V7z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </div>
+        <div class="widget_player__volume_slider" id="player__volume_slider">
+          <div class="widget_player__volume_line">
+            <div class="widget_player__volume_fill" id="player__volume_fill" style="width: 50%">
+              <div class="widget_player__volume_dot"></div>
+            </div>
+          </div>
+          <span class="widget_player__volume_value" id="player__volume_value">50%</span>
+        </div>
+      </div>
+    </div>
 
-    <!-- Боковые кнопки -->
+    <div class="widget_apps widget" data-count="4">
+      <div class="app_slot" data-slot="1"></div>
+      <div class="app_slot" data-slot="2"></div>
+      <div class="app_slot" data-slot="3"></div>
+      <div class="app_slot" data-slot="4"></div>
+    </div>
+
     <div class="right-buttons" aria-label="Быстрые действия">
       <div id="btnWallpaper" class="widget_buttons" title="Автосмена обоев">
         <span class="right-button__halo" aria-hidden="true"></span>
@@ -247,31 +214,33 @@
     </div>
   </div>
 
-  <!-- Шторка климата -->
   <div id="climate-picker" class="picker-drawer">
     <div class="drawer-header"><span class="drawer-title">Выберите функцию</span><button class="drawer-close" id="climate-picker-close">✕</button></div>
     <div id="climate-picker-grid" class="picker-grid"></div>
   </div>
 
-  <!-- Пикер приложений -->
   <div id="app_picker" class="picker-drawer">
     <div class="drawer-header"><span class="drawer-title">Выберите приложение</span><button class="drawer-close" id="app-picker-close">✕</button></div>
     <div id="app-picker-grid" class="picker-grid"></div>
   </div>
 
-  <!-- Индикатор загрузки -->
   <div id="global-loader" class="global-loader hidden">
     <div class="spinner"></div>
   </div>
 
-  <!-- Видеофон -->
   <video id="video-background" muted loop playsinline></video>
+
+  <div id="volume-indicator" class="volume-indicator">
+    <div class="volume-indicator__bar"><div class="volume-indicator__fill"></div></div>
+    <div class="volume-indicator__value">50%</div>
+  </div>
+
+  <div id="diagOverlay" class="diag-overlay" aria-hidden="true"></div>
 </div>
 
-<!-- Скрипты -->
-<!-- Сначала ядро -->
+<script src="js/idb.js"></script>
 <script src="js/core.js"></script>
-<!-- Затем все модули -->
+<script src="js/climateLabels.js"></script>
 <script src="js/wallpaper.js"></script>
 <script src="js/clock.js"></script>
 <script src="js/network.js"></script>
@@ -281,45 +250,10 @@
 <script src="js/climate.js"></script>
 <script src="js/apps.js"></script>
 <script src="js/carData.js"></script>
+<script src="js/fuel.js"></script>
 <script src="js/settings.js"></script>
 <script src="js/volume-swipe.js"></script>
-<!-- И в конце main.js -->
+<script src="js/diag.js"></script>
 <script src="js/main.js"></script>
-
-<script>
-  // Дополнительный скрипт для управления прелоадером
-  (function() {
-    const preloader = document.getElementById('startup-preloader');
-    const appContent = document.getElementById('app-content');
-    
-    // Функция показа контента
-    function showContent() {
-      if (appContent) {
-        appContent.classList.add('ready');
-      }
-      if (preloader) {
-        preloader.classList.add('hide');
-        setTimeout(() => {
-          if (preloader && preloader.parentNode) {
-            preloader.remove();
-          }
-        }, 500);
-      }
-    }
-    
-    // Ждем полной загрузки всего контента
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', () => {
-        // Даем время на инициализацию модулей
-        setTimeout(showContent, 100);
-      });
-    } else {
-      setTimeout(showContent, 100);
-    }
-    
-    // Дополнительная страховка - если что-то пошло не так, покажем через 3 секунды
-    setTimeout(showContent, 3000);
-  })();
-</script>
 </body>
 </html>
