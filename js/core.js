@@ -1,7 +1,6 @@
 /**********************************************
  * Ядро: токен, хранилище, API, утилиты
- * [FIX] Добавлена очередь команд (из app.js).
- * [FIX] Добавлен carCommandAsync (для будущего).
+ * [FIX] Добавлен запрос каталога приложений (launcherCatalog).
  **********************************************/
 
 if (typeof window.MANIFEST === 'undefined' || !window.MANIFEST) {
@@ -87,12 +86,10 @@ function finishEnumCommand(requestId) {
 const android = {
   call: callAndroid,
   
-  // Отправка команд через очередь
   runEnum(cmd) {
     enqueueEnumCommand(cmd);
   },
   
-  // Запрос состояния (климат/топливо) через carResponse
   async requestCarDataAsync(key, timeoutMs = 3000) {
     const id = nextReqId('data_' + key);
     const ok = callAndroid('requestCarDataAsync', id, key);
@@ -103,6 +100,27 @@ const android = {
       try { return JSON.parse(resp); } catch { return resp; }
     }
     return resp;
+  },
+
+  // [NEW] Запрос каталога приложений
+  async getLauncherCatalogAsync(timeoutMs = 3000) {
+    const id = nextReqId('catalog');
+    const ok = callAndroid('requestLauncherCatalogAsync', id);
+    if (ok !== true) return null;
+    const resp = await waitForResponse(id, timeoutMs);
+    if (!resp) return null;
+    if (typeof resp === 'string') {
+      try { return JSON.parse(resp); } catch { return resp; }
+    }
+    return resp;
+  },
+
+  getUserApps() {
+    return callAndroid('getUserApps');
+  },
+
+  runApp(pkg) {
+    callAndroid('runApp', pkg);
   },
 
   getVolume() {
@@ -125,13 +143,11 @@ function handleCarResponse(raw) {
   let evt = typeof raw === 'string' ? JSON.parse(raw) : raw;
   if (!evt || !evt.requestId) return;
   
-  // Если это ответ на команду (runEnum)
   if (commandInFlight && evt.requestId === commandInFlight.requestId) {
     finishEnumCommand(evt.requestId);
     return;
   }
 
-  // Если это ответ на запрос данных
   const resolve = responseWaiters[evt.requestId];
   if (resolve) {
     delete responseWaiters[evt.requestId];

@@ -1,7 +1,7 @@
 /**********************************************
- * Модуль: Приложения (слоты 2, 4, 6)
- * [FIX] Возвращена рабочая логика назначения приложений на слоты.
- * [FIX] Добавлен безопасный парсинг ответа моста.
+ * Модуль: Приложения
+ * [FIX] Теперь список приложений запрашивается через requestLauncherCatalogAsync
+ *       (как в эталоне Generic Exlantix).
  **********************************************/
 
 modules.apps = (function() {
@@ -13,6 +13,10 @@ modules.apps = (function() {
     if (typeof raw === 'string') {
       try { data = JSON.parse(raw); } catch { return []; }
     }
+    // Если это каталог {section: 'apps', items: [...]}
+    if (data && data.section === 'apps' && Array.isArray(data.items)) {
+      return data.items;
+    }
     if (Array.isArray(data)) return data;
     if (data && typeof data === 'object') {
       if (Array.isArray(data.apps)) return data.apps;
@@ -23,7 +27,7 @@ modules.apps = (function() {
     return [];
   }
 
-  function openPickerForSlot(slotElement) {
+  async function openPickerForSlot(slotElement) {
     const slotId = slotElement.dataset.slot;
     if (!slotId) return;
     
@@ -36,9 +40,22 @@ modules.apps = (function() {
     grid.innerHTML = '<div style="grid-column:1/-1;padding:20px;text-align:center;">Загрузка приложений...</div>';
     picker.classList.add('open');
     
-    setTimeout(() => {
-      grid.innerHTML = '';
-      let apps = [];
+    let apps = [];
+
+    // 1. Пробуем запросить через requestLauncherCatalogAsync (работает в Exlantix)
+    try {
+      if (window.androidApi && typeof window.androidApi.requestLauncherCatalogAsync === 'function') {
+        const catalogData = await android.getLauncherCatalogAsync(3000);
+        if (catalogData) {
+          apps = safeParseApps(catalogData);
+        }
+      }
+    } catch (e) {
+      console.error('[Apps] Ошибка получения каталога:', e);
+    }
+
+    // 2. Если пусто — пробуем через getUserApps (на случай если это старый мост)
+    if (!apps.length) {
       try {
         if (window.android && typeof android.getUserApps === 'function') {
           const appsRaw = android.getUserApps();
@@ -47,65 +64,65 @@ modules.apps = (function() {
       } catch (e) {
         console.error('[Apps] Ошибка получения приложений:', e);
       }
+    }
 
-      if (!apps.length) {
-        grid.innerHTML = '<div style="grid-column:1/-1;padding:20px;text-align:center;">Нет установленных приложений</div>';
-        return;
+    // Рендерим результат
+    grid.innerHTML = '';
+    if (!apps.length) {
+      grid.innerHTML = '<div style="grid-column:1/-1;padding:20px;text-align:center;">Нет установленных приложений</div>';
+      return;
+    }
+
+    apps.forEach(app => {
+      if (!app) return;
+      const d = document.createElement('div');
+      d.className = 'picker-item';
+
+      const img = document.createElement('img');
+      if (app.icon) {
+         if (app.icon.startsWith('data:image') || app.icon.startsWith('http')) {
+            img.src = app.icon;
+         } else {
+            img.src = `data:image/png;base64,${app.icon}`;
+         }
+      } else {
+         img.src = 'icons/Default.svg';
       }
 
-      apps.forEach(app => {
-        if (!app) return;
-        const d = document.createElement('div');
-        d.className = 'picker-item';
+      const nameSpan = document.createElement('span');
+      nameSpan.textContent = app.name || app.label || app.package || 'Приложение';
 
-        const img = document.createElement('img');
-        if (app.icon) {
-           if (app.icon.startsWith('data:image') || app.icon.startsWith('http')) {
-              img.src = app.icon;
-           } else {
-              img.src = `data:image/png;base64,${app.icon}`;
-           }
-        } else {
-           img.src = 'icons/Default.svg';
+      d.appendChild(img);
+      d.appendChild(nameSpan);
+
+      d.onclick = () => {
+        storage.save(`app_slot_${currentPickerSlot}`, {
+          package: app.package || app.packageName,
+          name: app.name || app.label || 'Приложение',
+          icon: app.icon
+        });
+
+        const slotEl = document.querySelector(`.app_slot[data-slot="${currentPickerSlot}"]`);
+        if (slotEl) {
+          slotEl.setAttribute('data-app-name', app.name || app.label || '');
+          slotEl.innerHTML = `<img src="${img.src}">`;
+          
+          const showLabels = storage.load('setting_showAppLabels');
+          if (showLabels) {
+            const labelSpan = document.createElement('span');
+            labelSpan.className = 'app-label';
+            labelSpan.textContent = app.name || app.label || '';
+            slotEl.appendChild(labelSpan);
+            slotEl.classList.add('has-label');
+          }
         }
 
-        const nameSpan = document.createElement('span');
-        nameSpan.textContent = app.name || app.label || app.package || 'Приложение';
+        picker.classList.remove('open');
+        currentPickerSlot = null;
+      };
 
-        d.appendChild(img);
-        d.appendChild(nameSpan);
-
-        d.onclick = () => {
-          // Сохраняем в storage
-          storage.save(`app_slot_${currentPickerSlot}`, {
-            package: app.package || app.packageName,
-            name: app.name || app.label || 'Приложение',
-            icon: app.icon
-          });
-
-          // Обновляем слот на экране
-          const slotEl = document.querySelector(`.app_slot[data-slot="${currentPickerSlot}"]`);
-          if (slotEl) {
-            slotEl.setAttribute('data-app-name', app.name || app.label || '');
-            slotEl.innerHTML = `<img src="${img.src}">`;
-            
-            const showLabels = storage.load('setting_showAppLabels');
-            if (showLabels) {
-              const labelSpan = document.createElement('span');
-              labelSpan.className = 'app-label';
-              labelSpan.textContent = app.name || app.label || '';
-              slotEl.appendChild(labelSpan);
-              slotEl.classList.add('has-label');
-            }
-          }
-
-          picker.classList.remove('open');
-          currentPickerSlot = null;
-        };
-
-        grid.appendChild(d);
-      });
-    }, 50);
+      grid.appendChild(d);
+    });
   }
 
   function renderSlot(slotElement) {
