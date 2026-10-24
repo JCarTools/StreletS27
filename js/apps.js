@@ -1,7 +1,6 @@
 /**********************************************
  * Модуль: Приложения
- * [FIX] Теперь список приложений запрашивается через requestLauncherCatalogAsync
- *       (как в эталоне Generic Exlantix).
+ * [FIX] Добавлена подробная диагностика получения приложений.
  **********************************************/
 
 modules.apps = (function() {
@@ -13,7 +12,6 @@ modules.apps = (function() {
     if (typeof raw === 'string') {
       try { data = JSON.parse(raw); } catch { return []; }
     }
-    // Если это каталог {section: 'apps', items: [...]}
     if (data && data.section === 'apps' && Array.isArray(data.items)) {
       return data.items;
     }
@@ -42,31 +40,32 @@ modules.apps = (function() {
     
     let apps = [];
 
-    // 1. Пробуем запросить через requestLauncherCatalogAsync (работает в Exlantix)
+    // 1. Пробуем requestLauncherCatalogAsync
     try {
       if (window.androidApi && typeof window.androidApi.requestLauncherCatalogAsync === 'function') {
-        const catalogData = await android.getLauncherCatalogAsync(3000);
+        const catalogData = await android.getLauncherCatalogAsync(2000);
+        if (typeof diag !== 'undefined') diag.log(`[Apps] Catalog response: ${JSON.stringify(catalogData).slice(0, 300)}`);
         if (catalogData) {
           apps = safeParseApps(catalogData);
         }
       }
     } catch (e) {
-      console.error('[Apps] Ошибка получения каталога:', e);
+      if (typeof diag !== 'undefined') diag.log(`[Apps] Catalog error: ${e.message}`);
     }
 
-    // 2. Если пусто — пробуем через getUserApps (на случай если это старый мост)
+    // 2. Если пусто — пробуем getUserApps
     if (!apps.length) {
       try {
         if (window.android && typeof android.getUserApps === 'function') {
           const appsRaw = android.getUserApps();
+          if (typeof diag !== 'undefined') diag.log(`[Apps] getUserApps response: ${String(appsRaw).slice(0, 300)}`);
           apps = safeParseApps(appsRaw);
         }
       } catch (e) {
-        console.error('[Apps] Ошибка получения приложений:', e);
+        if (typeof diag !== 'undefined') diag.log(`[Apps] getUserApps error: ${e.message}`);
       }
     }
 
-    // Рендерим результат
     grid.innerHTML = '';
     if (!apps.length) {
       grid.innerHTML = '<div style="grid-column:1/-1;padding:20px;text-align:center;">Нет установленных приложений</div>';
@@ -267,7 +266,6 @@ modules.apps = (function() {
   }
 
   function init() {
-    console.log('[Apps] Инициализация...');
     initPicker();
     initSlots();
     updateAllSlots();

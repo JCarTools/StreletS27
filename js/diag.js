@@ -1,8 +1,6 @@
 /**********************************************
  * [DIAG] Визуальная диагностика для машины (без консоли).
- * [FIX] Фильтруем спам (hud/gps/speed) — пишем только важное.
- * [FIX] Для carResponse показываем ПОЛНЫЙ response (до 500 символов).
- * [NEW] В диагностике пробуем много ключей для климата.
+ * [FIX] Добавлен перехват launcherCatalog.
  **********************************************/
 
 const diag = (function() {
@@ -17,7 +15,8 @@ const diag = (function() {
   const CLICK_WINDOW_MS = 3000;
 
   const IMPORTANT_EVENTS = new Set([
-    'carResponse', 'climateState', 'carData', 'musicInfo', 'volumeChanged'
+    'carResponse', 'climateState', 'carData', 'musicInfo', 'volumeChanged',
+    'launcherCatalog' // <--- Добавили
   ]);
 
   function ensureEl() {
@@ -93,23 +92,14 @@ const diag = (function() {
     log('=== ДИАГНОСТИКА ===');
     log('TOKEN:', TOKEN);
 
-    log('--- Запрос климата (много ключей) ---');
-    const keys = ['climate', 'climateState', 'climateData', 'carData', 'all', 'frontSeats', 'fuel', 'battery'];
-    keys.forEach(key => {
-      const id = 'diag_' + key + '_' + Date.now();
-      safeCall(`requestCarDataAsync("${key}")`, () => callApi('requestCarDataAsync', TOKEN, id, key));
+    log('--- Каталог приложений ---');
+    safeCall('requestLauncherCatalogAsync', () => {
+      const id = 'diag_apps_' + Date.now();
+      return callApi('requestLauncherCatalogAsync', TOKEN, id);
     });
+    safeCall('getUserApps', () => callApi('getUserApps', TOKEN));
 
-    log('--- requestRunEnumAsync ---');
-    safeCall('requestRunEnumAsync(MEDIA_PLAY)', () => {
-      const id = 'diag_enum_' + Date.now();
-      return callApi('requestRunEnumAsync', TOKEN, id, 'MEDIA_PLAY');
-    });
-
-    log('--- requestClimateState ---');
-    safeCall('requestClimateState()', () => callApi('requestClimateState', TOKEN));
-
-    log('=== ЖДУ carResponse (ответы на запросы выше) ===');
+    log('=== ЖДУ carResponse ===');
   }
 
   function handleNetworkClick() {
@@ -166,7 +156,6 @@ const diag = (function() {
     let preview;
     try {
       if (type === 'carResponse') {
-        // Для carResponse печатаем requestId + response целиком
         const evt = typeof data === 'string' ? JSON.parse(data) : data;
         const reqId = evt && evt.requestId ? evt.requestId : '?';
         const resp = evt && evt.response !== undefined ? evt.response : null;
@@ -174,6 +163,8 @@ const diag = (function() {
         try { respStr = (typeof resp === 'string') ? resp : JSON.stringify(resp); }
         catch { respStr = String(resp); }
         preview = `reqId=${reqId} response=${(respStr || '').slice(0, 500)}`;
+      } else if (type === 'launcherCatalog') {
+        preview = (typeof data === 'string') ? data.slice(0, 500) : JSON.stringify(data).slice(0, 500);
       } else {
         preview = (typeof data === 'string') ? data.slice(0, 500) : JSON.stringify(data).slice(0, 500);
       }
