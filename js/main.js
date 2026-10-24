@@ -1,7 +1,6 @@
 /**********************************************
  * My Black Window - Dashboard
- * [FIX] Проброс launcherCatalog в apps.js.
- * [FIX] Прелоадер скрывается максимум через 1.5 сек.
+ * [FIX] Убран вызов handleLauncherCatalog (т.к. apps.js работает через getUserApps).
  **********************************************/
 
 let originalOnAndroidEvent = window.onAndroidEvent;
@@ -19,9 +18,8 @@ window.onAndroidEvent = function(type, data) {
   } else if (type === "volumeChanged") {
     if (modules.volume) modules.volume.handleVolumeFromSystem(data);
     if (modules.player) modules.player.handleVolumeFromSystem(data);
-  } else if (type === "launcherCatalog") {
-    if (modules.apps) modules.apps.handleLauncherCatalog(data);
   }
+  
   if (originalOnAndroidEvent && typeof originalOnAndroidEvent === 'function') {
     try { originalOnAndroidEvent(type, data); } catch (e) { /* noop */ }
   }
@@ -90,8 +88,7 @@ function handleDoubleTap(e) {
 }
 
 let isReady = false;
-
-function hidePreloader() {
+function onAllModulesReady() {
   if (isReady) return;
   isReady = true;
   const preloader = document.getElementById('startup-preloader');
@@ -103,11 +100,6 @@ function hidePreloader() {
       if (preloader.parentNode) preloader.parentNode.removeChild(preloader);
     }, 500);
   }
-  console.log('[Main] Прелоадер скрыт');
-}
-
-function onAllModulesReady() {
-  hidePreloader();
 }
 
 function cleanupIntervals() {
@@ -123,15 +115,14 @@ window.addEventListener('beforeunload', cleanupIntervals);
 async function initUI() {
   if (typeof diag !== 'undefined') diag.init();
 
-  // [FIX] Не ждем восстановления обоев, запускаем в фоне, чтобы не тормозить старт
   if (modules.wallpaper) {
-    modules.wallpaper.restore().then(() => {
-      modules.wallpaper.initAutoMode();
-    }).catch(e => warn('[Main] wallpaper.restore error:', e));
+    try { await modules.wallpaper.restore(); }
+    catch (e) { warn('[Main] wallpaper.restore error:', e); }
+    try { modules.wallpaper.initAutoMode(); }
+    catch (e) { warn('[Main] wallpaper.initAutoMode error:', e); }
     document.body.classList.remove('widgets-hidden');
     storage.save('widgetsHiddenByUser', false);
   }
-
   if (modules.clock) modules.clock.start();
   if (modules.brandEditor) modules.brandEditor.init();
   if (modules.player) modules.player.init();
@@ -238,28 +229,13 @@ async function initUI() {
 }
 
 async function start() {
-  // [FIX] Запускаем таймер: максимум 1.5 секунды показываем прелоадер.
-  // Если модули загрузятся быстрее — скроем раньше.
-  const safetyTimeout = setTimeout(() => {
-    console.warn('[Main] Принудительное скрытие прелоадера (таймаут 1.5с)');
-    hidePreloader();
-  }, 1500);
-
   try {
     if (modules.climate) await modules.climate.init();
     await initUI();
   } catch (e) {
     console.error('[Main] Ошибка инициализации:', e);
   } finally {
-    // Как только базовая инициализация прошла — скрываем прелоадер
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        setTimeout(() => {
-          clearTimeout(safetyTimeout);
-          hidePreloader();
-        }, 100);
-      });
-    });
+    setTimeout(onAllModulesReady, 500);
   }
 }
 
