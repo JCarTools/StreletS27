@@ -1,6 +1,6 @@
 /**********************************************
  * Модуль: Приложения
- * [FIX] Возврат к жесткому base64 (как в v2.1).
+ * [FIX] Возврат к оригинальной структуре вставки <img> (как в v2.1).
  **********************************************/
 
 modules.apps = (function() {
@@ -35,29 +35,34 @@ modules.apps = (function() {
       const d = document.createElement('div');
       d.className = 'picker-item';
 
-      // Жестко формируем base64 как в старом рабочем коде
+      // Формируем иконку ровно как в старом рабочем коде
       let imgSrc = 'icons/Default.svg';
-      if (app.icon && app.icon.length > 10) {
+      if (app.icon) {
         imgSrc = `data:image/png;base64,${app.icon}`;
       }
 
-      d.innerHTML = `<img src="${imgSrc}"><span>${app.name || app.label || app.package || 'Приложение'}</span>`;
+      const name = app.name || app.label || app.package || 'Приложение';
+
+      d.innerHTML = `
+        <img src="${imgSrc}">
+        <span>${name}</span>
+      `;
 
       d.onclick = () => {
         if (!currentPickerSlot) return;
         
         storage.save(`app_slot_${currentPickerSlot}`, {
           package: app.package || app.packageName,
-          name: app.name || app.label || 'Приложение',
+          name: name,
           icon: app.icon
         });
 
         const slotEl = document.querySelector(`.app_slot[data-slot="${currentPickerSlot}"]`);
         if (slotEl) {
-          slotEl.setAttribute('data-app-name', app.name || app.label || '');
+          slotEl.setAttribute('data-app-name', name);
           
           let slotImgSrc = 'icons/Default.svg';
-          if (app.icon && app.icon.length > 10) {
+          if (app.icon) {
             slotImgSrc = `data:image/png;base64,${app.icon}`;
           }
           
@@ -67,7 +72,7 @@ modules.apps = (function() {
           if (showLabels) {
             const labelSpan = document.createElement('span');
             labelSpan.className = 'app-label';
-            labelSpan.textContent = app.name || app.label || '';
+            labelSpan.textContent = name;
             slotEl.appendChild(labelSpan);
             slotEl.classList.add('has-label');
           }
@@ -107,7 +112,7 @@ modules.apps = (function() {
 
   function closePicker() {
     const picker = document.getElementById("app_picker");
-    if (picker) picker.classList.remove('open');
+    if (picker) picker.classList.remove("open");
     isPickerOpen = false;
     currentPickerSlot = null;
     currentPickerGrid = null;
@@ -163,7 +168,7 @@ modules.apps = (function() {
     }
     
     let imgSrc = 'icons/Default.svg';
-    if (saved.icon && saved.icon.length > 10) {
+    if (saved.icon) {
       imgSrc = `data:image/png;base64,${saved.icon}`;
     }
 
