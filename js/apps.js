@@ -1,6 +1,6 @@
 /**********************************************
  * Модуль: Приложения
- * [FIX] Возврат к простому парсингу base64 (как в v2.1).
+ * [FIX] Возврат к жесткому base64 (как в v2.1).
  **********************************************/
 
 modules.apps = (function() {
@@ -20,65 +20,6 @@ modules.apps = (function() {
     });
   }
 
-  // Универсальная функция создания картинки приложения
-  function createAppIconElement(app, size = '2.2rem') {
-    const container = document.createElement('div');
-    container.style.width = size;
-    container.style.height = size;
-    container.style.display = 'flex';
-    container.style.alignItems = 'center';
-    container.style.justifyContent = 'center';
-    container.style.borderRadius = '0.5rem';
-    container.style.overflow = 'hidden';
-    
-    let iconStr = app.icon;
-    let hasImage = false;
-
-    if (iconStr && typeof iconStr === 'string' && iconStr.length > 20) {
-      let src = iconStr.trim();
-      
-      // Если вдруг мост уже прислал с префиксом
-      if (src.startsWith('data:image/')) {
-         // уже готово
-      } else {
-         // Принудительно добавляем префикс
-         src = `data:image/png;base64,${src}`;
-      }
-      
-      const img = document.createElement('img');
-      img.style.width = '100%';
-      img.style.height = '100%';
-      img.style.objectFit = 'contain';
-      img.src = src;
-      
-      // Если картинка не загрузилась — заменяем на букву
-      img.onerror = () => {
-        container.innerHTML = '';
-        const letter = (app.name || app.label || app.package || '?').charAt(0).toUpperCase();
-        container.textContent = letter;
-        container.style.background = 'rgba(255,255,255,0.1)';
-        container.style.color = '#fff';
-        container.style.fontWeight = 'bold';
-      };
-      
-      container.appendChild(img);
-      return container;
-    }
-
-    // Если картинки нет вообще (или она пустая) — показываем букву
-    const letter = (app.name || app.label || app.package || '?').charAt(0).toUpperCase();
-    container.textContent = letter;
-    container.style.fontWeight = 'bold';
-    container.style.color = '#fff';
-    
-    // Рандомный цвет для фона по первой букве
-    const colors = ['#e57373', '#f06292', '#ba68c8', '#9575cd', '#7986cb', '#64b5f6', '#4fc3f7', '#4dd0e1', '#4db6ac', '#81c784', '#aed581', '#ffb74d', '#ff8a65', '#a1887f'];
-    const charCode = letter.charCodeAt(0) || 0;
-    container.style.background = colors[charCode % colors.length];
-
-    return container;
-  }
-
   function renderAppsInGrid() {
     if (!currentPickerGrid) return;
     
@@ -94,14 +35,13 @@ modules.apps = (function() {
       const d = document.createElement('div');
       d.className = 'picker-item';
 
-      const iconEl = createAppIconElement(app, '2.5rem');
-      
-      const nameSpan = document.createElement('span');
-      nameSpan.textContent = app.name || app.label || app.package || 'Приложение';
-      nameSpan.style.marginTop = '0.4rem';
+      // Жестко формируем base64 как в старом рабочем коде
+      let imgSrc = 'icons/Default.svg';
+      if (app.icon && app.icon.length > 10) {
+        imgSrc = `data:image/png;base64,${app.icon}`;
+      }
 
-      d.appendChild(iconEl);
-      d.appendChild(nameSpan);
+      d.innerHTML = `<img src="${imgSrc}"><span>${app.name || app.label || app.package || 'Приложение'}</span>`;
 
       d.onclick = () => {
         if (!currentPickerSlot) return;
@@ -116,9 +56,12 @@ modules.apps = (function() {
         if (slotEl) {
           slotEl.setAttribute('data-app-name', app.name || app.label || '');
           
-          const slotIcon = createAppIconElement(app, '2.2rem');
-          slotEl.innerHTML = '';
-          slotEl.appendChild(slotIcon);
+          let slotImgSrc = 'icons/Default.svg';
+          if (app.icon && app.icon.length > 10) {
+            slotImgSrc = `data:image/png;base64,${app.icon}`;
+          }
+          
+          slotEl.innerHTML = `<img src="${slotImgSrc}">`;
           
           const showLabels = storage.load('setting_showAppLabels');
           if (showLabels) {
@@ -219,9 +162,12 @@ modules.apps = (function() {
       return;
     }
     
-    const iconEl = createAppIconElement(saved, '2.2rem');
-    slotElement.innerHTML = '';
-    slotElement.appendChild(iconEl);
+    let imgSrc = 'icons/Default.svg';
+    if (saved.icon && saved.icon.length > 10) {
+      imgSrc = `data:image/png;base64,${saved.icon}`;
+    }
+
+    slotElement.innerHTML = `<img src="${imgSrc}">`;
     slotElement.setAttribute('data-app-name', saved.name || '');
     
     const showLabels = storage.load('setting_showAppLabels');
