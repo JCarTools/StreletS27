@@ -1,6 +1,7 @@
 /**********************************************
  * My Black Window - Dashboard
- * [FIX] Убран вызов handleLauncherCatalog (т.к. apps.js работает через getUserApps).
+ * [FIX] Скрытие виджетов теперь работает по нажатию ДВУМЯ пальцами
+ *       на фон (Multi-touch), а не двойным кликом.
  **********************************************/
 
 let originalOnAndroidEvent = window.onAndroidEvent;
@@ -61,29 +62,21 @@ function isBackgroundElement(target) {
   return true;
 }
 
-let lastTap = 0;
-let lastTapX = 0, lastTapY = 0;
-const DOUBLE_TAP_MS = 500;
-const DOUBLE_TAP_DISTANCE = 60;
-
-function handleDoubleTap(e) {
+// Обработчик нажатия ДВУМЯ пальцами (Multi-touch)
+function handleMultiTouch(e) {
+  // Проверяем, включена ли настройка
   const doubleTapEnabled = storage.load('setting_doubleTapToHideWidgets');
   if (!doubleTapEnabled) return;
+
+  // Проверяем, что коснулись именно фона (а не виджетов)
   if (!isBackgroundElement(e.target)) return;
-  const point = e.touches?.[0] || e;
-  const x = point?.clientX ?? 0;
-  const y = point?.clientY ?? 0;
-  const currentTime = Date.now();
-  const tapLength = currentTime - lastTap;
-  const dx = x - lastTapX, dy = y - lastTapY;
-  const dist = Math.sqrt(dx * dx + dy * dy);
-  if (tapLength < DOUBLE_TAP_MS && tapLength > 0 && dist < DOUBLE_TAP_DISTANCE) {
-    if (e.cancelable) e.preventDefault();
+
+  // Если коснулись ровно двумя пальцами
+  if (e.touches && e.touches.length === 2) {
+    if (e.cancelable) e.preventDefault(); // Отменяем зум или скролл
     e.stopPropagation();
+    
     document.body.classList.toggle('widgets-hidden');
-    lastTap = 0; lastTapX = 0; lastTapY = 0;
-  } else {
-    lastTap = currentTime; lastTapX = x; lastTapY = y;
   }
 }
 
@@ -163,6 +156,7 @@ async function initUI() {
   }
   if (storage.load("wallpaperMode") === "auto") btnWallpaper?.classList.add("active");
 
+  // Обычный клик по фону (смена обоев)
   document.body.addEventListener("click", (e) => {
     if (document.body.classList.contains('off-mode')) {
       const exclude = [
@@ -179,9 +173,19 @@ async function initUI() {
       }
       return;
     }
+    
     const tapToChangeEnabled = storage.load('setting_tapToChangeWallpaper');
     if (tapToChangeEnabled === false) return;
     if (!isBackgroundElement(e.target)) return;
+    
+    // Если виджеты скрыты (мы в режиме просмотра обоев) - одиночный клик их вернет
+    if (document.body.classList.contains('widgets-hidden')) {
+       if (modules.wallpaper && modules.wallpaper.isVideoMode && modules.wallpaper.isVideoMode()) {
+          toggleWidgetsVisibility();
+       }
+       return;
+    }
+
     if (modules.wallpaper && modules.wallpaper.isVideoMode && modules.wallpaper.isVideoMode()) {
       toggleWidgetsVisibility();
     } else {
@@ -189,8 +193,8 @@ async function initUI() {
     }
   });
 
-  document.body.addEventListener("touchstart", handleDoubleTap);
-  document.body.addEventListener("mousedown", handleDoubleTap);
+  // Мульти-тач (два пальца) для скрытия виджетов
+  document.body.addEventListener("touchstart", handleMultiTouch, { passive: false });
 
   const sidebar = document.getElementById("sidebar");
   document.getElementById("openSidebar")?.addEventListener("click", (e) => {
