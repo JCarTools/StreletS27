@@ -1,22 +1,41 @@
 /**********************************************
  * Модуль: Обои (статические, авто, видео)
- * [FIX] Fallback wallpaperMode при первом запуске
- * [PERF] Лимит кеша по размеру (MAX_CACHE_BYTES)
- * [FIX] testServerUrl: fallback на Image() при CORS-ошибке
- * [UX] restoreButtonsPosition удалён — позиция сети больше не сохраняется
+ * [FIX] Поддержка пользовательского сервера (user_custom).
+ * [FIX] Откат индекса при неудаче.
+ * [FIX] Убран стандартный сервер Яндекса из дефолтных.
+ * [NEW] Добавлены серверы: Любовь, Легкий стиль, Милые животные, Динамичные.
  **********************************************/
 
 modules.wallpaper = (function() {
-  const staticWallpapers = Array.from(document.querySelectorAll('.wallpaper-item')).map(item => item.dataset.src);
+  const IDB_CUSTOM_WALLPAPERS_KEY = 'wallpaper_custom_list';
+  const IDB_CUSTOM_WALLPAPER_DATA_PREFIX = 'wallpaper_custom_data_';
+  const HIDDEN_BUILTINS_KEY = 'wallpaper_hidden_builtins';
+
+  const builtinWallpapersMeta = Array.from(document.querySelectorAll('.wallpaper-item')).map((item, idx) => ({
+    id: `builtin_${idx}`,
+    name: (item.querySelector('img')?.alt) || `Обои ${idx + 1}`,
+    src: item.dataset.src,
+    isBuiltin: true
+  }));
+
+  let staticWallpapers = []; 
   let customWallpaperIndex = 0;
   const MAX_CACHE_SIZE = 10;
-  const MAX_CACHE_BYTES = 24 * 1024 * 1024; // [PERF] ~24 МБ
+  const MAX_CACHE_BYTES = 24 * 1024 * 1024;
   const IDB_CACHE_KEY = 'wallpaper_cache';
   const IDB_CURRENT_KEY = 'wallpaper_current';
   const CACHE_INDEX_KEY = 'wallpaper_cache_index';
 
+  // Кастомные серверы
+  const FIXED_PEIZAZHI_URL = 'https://bingw.jasonzeng.dev/?resolution=1920x1080&index=random';
+  const FIXED_CARS_URL = 'https://api.icofun.cn/API/360bz.php?n=10&type=image';
+  const FIXED_LOVE_URL = 'https://api.icofun.cn/API/360bz.php?n=3&type=image';
+  const FIXED_THEME_URL = 'https://api.icofun.cn/API/360bz.php?n=5&type=image';
+  const FIXED_ANIMALS_URL = 'https://api.icofun.cn/API/360bz.php?n=8&type=image';
+  const FIXED_DYNAMIC_URL = 'https://api.icofun.cn/API/360bz.php?n=13&type=image';
+
+  // Резервные (если пользователь их выберет)
   const IMAGE_SOURCES = [
-    { name: 'LoremFlickr', id: 'loremflickr', url: (w, h) => `https://loremflickr.com/${w}/${h}/landscape/all?lock=${Date.now()}` },
     { name: 'LoremFlickr CN (Россия)', id: 'loremflickrcn', url: (w, h) => `https://loremflickrcn.com/${w}/${h}/landscape?random&lock=${Date.now()}` },
     { name: 'Picsum Proxy (Россия)', id: 'picsum_proxy', url: (w, h) => `https://jcartools.ru/run/picsum_proxy.php?${w}/${h}&t=${Date.now()}` },
     { name: 'Picsum', id: 'picsum', url: (w, h) => `https://picsum.photos/${w}/${h}?random&t=${Date.now()}` },
@@ -27,6 +46,7 @@ modules.wallpaper = (function() {
   let preloadImage = null, preloadAbortController = null;
   let isLoading = false;
   let autoTimer = null;
+  let builtinAutoTimer = null;
   let glowTimeout = null;
 
   let videoElement = document.getElementById('video-background');
@@ -43,6 +63,7 @@ modules.wallpaper = (function() {
     document.body.appendChild(videoElement);
   }
 
+  let currentVideoObjectUrl = null;
   let videoWatchdogInterval = null;
   let isVideoModeActive = false;
 
@@ -67,18 +88,15 @@ modules.wallpaper = (function() {
     videoElement.play().catch(e => warn('Video replay failed:', e));
   }
 
-  function getCustomServerSource() {
-    const raw = storage.load('setting_wallpaperCustomServer');
+  function getCustomServerSource(key, name) {
+    const raw = storage.load(`setting_${key}`);
     if (!raw || typeof raw !== 'string') return null;
     const trimmed = raw.trim();
     if (!trimmed) return null;
-    if (!/^https?:\/\//i.test(trimmed)) {
-      warn('[Wallpaper] Кастомный сервер: URL должен начинаться с http(s)://');
-      return null;
-    }
+    if (!/^https?:\/\//i.test(trimmed)) return null;
     return {
-      name: 'Свой сервер',
-      id: 'custom',
+      name: name,
+      id: key.replace('wallpaperCustomServer', 'custom'),
       url: (w, h) => {
         let result = trimmed;
         result = result.replace(/\{w\}/g, String(w)).replace(/\{h\}/g, String(h));
@@ -91,25 +109,61 @@ modules.wallpaper = (function() {
     };
   }
 
+  function getCustomServerSourceUser() {
+    const raw = storage.load('setting_user_custom_url');
+    const enabled = storage.load('setting_user_custom_enabled') === true;
+    if (!enabled || !raw || typeof raw !== 'string') return null;
+    const trimmed = raw.trim();
+    if (!trimmed) return null;
+    if (!/^https?:\/\//i.test(trimmed)) return null;
+    return {
+      name: 'Свой сервер',
+      id: 'user_custom',
+      url: (w, h) => {
+        let result = trimmed;
+        result = result.replace(/\{w\}/g, String(w)).replace(/\{h\}/g, String(h));
+        result = result.replace(/%w%/g, String(w)).replace(/%h%/g, String(h));
+        if (!/[?&](t|lock|random)=/i.test(result)) {
+          result += (result.includes('?') ? '&' : '?') + 't=' + Date.now();
+        }
+        return result;
+      }
+    };
+  }
+
+  function isCustomEnabled(which) {
+    return storage.load(`setting_${which}Enabled`) === true;
+  }
+
   function updateServers(selectedIds) {
-    const custom = getCustomServerSource();
+    const custom1  = isCustomEnabled('wallpaperCustomServer')  ? getCustomServerSource('wallpaperCustomServer', 'Пейзажи')  : null;
+    const custom2 = isCustomEnabled('wallpaperCustomServer2') ? getCustomServerSource('wallpaperCustomServer2', 'Автомобили') : null;
+    const custom3 = isCustomEnabled('wallpaperCustomServer3') ? getCustomServerSource('wallpaperCustomServer3', 'Любовь') : null;
+    const custom4 = isCustomEnabled('wallpaperCustomServer4') ? getCustomServerSource('wallpaperCustomServer4', 'Легкий стиль') : null;
+    const custom5 = isCustomEnabled('wallpaperCustomServer5') ? getCustomServerSource('wallpaperCustomServer5', 'Милые животные') : null;
+    const custom6 = isCustomEnabled('wallpaperCustomServer6') ? getCustomServerSource('wallpaperCustomServer6', 'Динамичные') : null;
+    const customUser = getCustomServerSourceUser();
+    
     let built = [];
 
-    if (custom) built.push(custom);
+    if (custom1)  built.push(custom1);
+    if (custom2) built.push(custom2);
+    if (custom3) built.push(custom3);
+    if (custom4) built.push(custom4);
+    if (custom5) built.push(custom5);
+    if (custom6) built.push(custom6);
+    if (customUser) built.push(customUser);
 
     if (Array.isArray(selectedIds) && selectedIds.length > 0) {
       built = built.concat(IMAGE_SOURCES.filter(s => selectedIds.includes(s.id)));
-    } else {
-      built = built.concat(IMAGE_SOURCES);
     }
 
-    if (built.length === 0) built = [...IMAGE_SOURCES];
     activeServers = built;
-    console.log('[Wallpaper] active servers:', activeServers.map(s => s.id).join(', '));
   }
 
   function getRandomSource() {
     if (activeServers.length === 0) updateServers(storage.load('wallpaperServers'));
+    if (activeServers.length === 0) return null;
     return activeServers[Math.floor(Math.random() * activeServers.length)];
   }
 
@@ -117,17 +171,14 @@ modules.wallpaper = (function() {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      console.log('[Wallpaper] fetch:', url);
       const res = await fetch(url, {
         signal: controller.signal,
         cache: 'no-store',
         mode: 'cors',
         credentials: 'omit'
       });
-      console.log('[Wallpaper] response:', res.status, res.type);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const blob = await res.blob();
-      console.log('[Wallpaper] blob size:', blob.size);
       if (blob.size < 10000) throw new Error('Image too small');
       return await new Promise((resolve, reject) => {
         const fr = new FileReader();
@@ -146,9 +197,7 @@ modules.wallpaper = (function() {
   }
   async function saveCache(cache) {
     const unique = [...new Set(cache)];
-    // [PERF] Лимит по количеству
     if (unique.length > MAX_CACHE_SIZE) unique.length = MAX_CACHE_SIZE;
-    // [PERF] Лимит по суммарному размеру base64
     let total = 0;
     const limited = [];
     for (const item of unique) {
@@ -185,13 +234,9 @@ modules.wallpaper = (function() {
         try { preloadAbortController.abort(); } catch (e) { /* noop */ }
         preloadAbortController = null;
       }
-      console.log('[Wallpaper] Кеш обоев очищен');
-    } catch (e) {
-      warn('[Wallpaper] clearCache error:', e);
-    }
+    } catch (e) {}
   }
 
-  // [FIX] Fallback-проверка через Image() если CORS заблокировал fetch
   function testImageViaImageElement(url, timeoutMs = 8000) {
     return new Promise((resolve) => {
       let settled = false;
@@ -250,7 +295,6 @@ modules.wallpaper = (function() {
     const timeout = setTimeout(() => controller.abort(), 8000);
 
     try {
-      console.log('[Wallpaper] testServerUrl fetch:', testUrl);
       const res = await fetch(testUrl, {
         signal: controller.signal,
         cache: 'no-store',
@@ -288,8 +332,6 @@ modules.wallpaper = (function() {
         return result;
       }
       if (isCors) {
-        // [FIX] Fallback на Image()
-        console.log('[Wallpaper] CORS error, fallback to Image()');
         const fallback = await testImageViaImageElement(testUrl, 8000);
         if (fallback.ok) {
           result.ok = true;
@@ -297,7 +339,7 @@ modules.wallpaper = (function() {
           result.details = fallback.details;
         } else {
           result.reason = 'Сеть/CORS: запрос заблокирован';
-          result.details = 'Сервер должен разрешать CORS (Access-Control-Allow-Origin) или быть доступен как <img>';
+          result.details = 'Сервер должен разрешать CORS или быть доступен как <img>';
         }
         return result;
       }
@@ -309,12 +351,15 @@ modules.wallpaper = (function() {
   }
 
   async function preloadNextWallpaper() {
-    // [PERF] Не прелоадим, если не в auto-режиме
     if (storage.load('wallpaperMode') !== 'auto') return;
-    if (preloadAbortController) preloadAbortController.abort();
-    preloadAbortController = new AbortController();
+    if (preloadAbortController) {
+      try { preloadAbortController.abort(); } catch (e) {}
+    }
+    const localController = new AbortController();
+    preloadAbortController = localController;
     const w = window.innerWidth, h = window.innerHeight;
     const source = getRandomSource();
+    if (!source) return;
     try {
       const base64 = await fetchImage(source.url(w, h), 10000);
       preloadImage = base64;
@@ -323,7 +368,9 @@ modules.wallpaper = (function() {
     } catch (e) {
       preloadImage = null;
     } finally {
-      preloadAbortController = null;
+      if (preloadAbortController === localController) {
+        preloadAbortController = null;
+      }
     }
   }
 
@@ -339,19 +386,35 @@ modules.wallpaper = (function() {
     stopWatchdog();
     isVideoModeActive = false;
     if (videoElement) {
-      videoElement.pause();
+      try { videoElement.pause(); } catch (e) {}
       videoElement.src = '';
       videoElement.style.display = 'none';
       videoElement.style.opacity = '';
       videoElement.removeEventListener('ended', handleVideoEnded);
     }
+    if (currentVideoObjectUrl) {
+      try { URL.revokeObjectURL(currentVideoObjectUrl); } catch (e) {}
+      currentVideoObjectUrl = null;
+    }
     document.body.classList.remove('has-video-background');
   }
 
   function setVideoBackground(fileOrUrl) {
-    const url = typeof fileOrUrl === 'string' ? encodeURI(fileOrUrl) : URL.createObjectURL(fileOrUrl);
+    let url;
+    let createdObjectUrl = false;
+    if (typeof fileOrUrl === 'string') {
+      url = fileOrUrl;
+    } else {
+      url = URL.createObjectURL(fileOrUrl);
+      createdObjectUrl = true;
+    }
     clearVideoBackground();
     stopAutoTimer();
+    stopBuiltinAutoTimer();
+
+    if (createdObjectUrl) {
+      currentVideoObjectUrl = url;
+    }
 
     videoElement.muted = true;
     videoElement.loop = true;
@@ -394,11 +457,7 @@ modules.wallpaper = (function() {
   function startAutoTimer() {
     stopAutoTimer();
     const intervalText = storage.load('autoWallpaperInterval') || '5 минут';
-
-    if (intervalText === 'Никогда') {
-      console.log('[Wallpaper] Автосмена: никогда (таймер не запущен)');
-      return;
-    }
+    if (intervalText === 'Никогда') return;
 
     let intervalMs = 300000;
     switch (intervalText) {
@@ -410,10 +469,7 @@ modules.wallpaper = (function() {
       case '30 минут': intervalMs = 1800000; break;
       case '1 час': intervalMs = 3600000; break;
     }
-    if (intervalMs <= 0) {
-      console.log('[Wallpaper] Автосмена: интервал <= 0, таймер не запущен');
-      return;
-    }
+    if (intervalMs <= 0) return;
     autoTimer = setInterval(() => {
       if (storage.load('wallpaperMode') === 'auto') setAuto(false);
     }, intervalMs);
@@ -421,6 +477,31 @@ modules.wallpaper = (function() {
 
   function stopAutoTimer() {
     if (autoTimer) { clearInterval(autoTimer); autoTimer = null; }
+  }
+
+  function startBuiltinAutoTimer() {
+    stopBuiltinAutoTimer();
+    const intervalText = storage.load('builtinWallpaperInterval') || 'Никогда';
+    if (intervalText === 'Никогда') return;
+
+    let intervalMs = 300000;
+    switch (intervalText) {
+      case '30 секунд': intervalMs = 30000; break;
+      case '1 минута': intervalMs = 60000; break;
+      case '2 минуты': intervalMs = 120000; break;
+      case '5 минут': intervalMs = 300000; break;
+      case '10 минут': intervalMs = 600000; break;
+      case '30 минут': intervalMs = 1800000; break;
+      case '1 час': intervalMs = 3600000; break;
+    }
+    if (intervalMs <= 0) return;
+    builtinAutoTimer = setInterval(() => {
+      if (storage.load('wallpaperMode') === 'custom') nextCustom();
+    }, intervalMs);
+  }
+
+  function stopBuiltinAutoTimer() {
+    if (builtinAutoTimer) { clearInterval(builtinAutoTimer); builtinAutoTimer = null; }
   }
 
   function syncButtonState(success) {
@@ -431,10 +512,7 @@ modules.wallpaper = (function() {
   }
 
   async function setAuto(showLoader = true) {
-    if (isLoading) {
-      warn('[Wallpaper] setAuto уже выполняется');
-      return false;
-    }
+    if (isLoading) return false;
     isLoading = true;
 
     if (showLoader) loader.show();
@@ -445,6 +523,7 @@ modules.wallpaper = (function() {
     try {
       clearVideoBackground();
       startAutoTimer();
+      stopBuiltinAutoTimer();
 
       const w = window.innerWidth, h = window.innerHeight;
       updateServers(storage.load('wallpaperServers'));
@@ -462,7 +541,6 @@ modules.wallpaper = (function() {
             preloadNextWallpaper();
             success = true;
           } catch (e) {
-            warn('[Wallpaper] applyWallpaper(preload) error:', e);
             preloadImage = null;
           }
         }
@@ -475,15 +553,12 @@ modules.wallpaper = (function() {
               preloadNextWallpaper();
               success = true;
             }
-          } catch (e) {
-            warn('[Wallpaper] getNextFromCache error:', e);
-          }
+          } catch (e) {}
         }
 
         if (!success) {
           for (const source of activeServers) {
             try {
-              console.log('[Wallpaper] trying source:', source.name);
               const url = source.url(w, h);
               const base64 = await fetchImage(url, 6000);
               await applyWallpaper(base64);
@@ -494,7 +569,6 @@ modules.wallpaper = (function() {
               break;
             } catch (e) {
               lastError = e;
-              console.warn(`[Wallpaper] Ошибка загрузки с ${source.name}:`, e && (e.message || e));
             }
           }
         }
@@ -503,7 +577,6 @@ modules.wallpaper = (function() {
       }
     } catch (e) {
       lastError = e;
-      console.error('[Wallpaper] setAuto fatal:', e);
     } finally {
       if (showLoader) loader.hide();
       isLoading = false;
@@ -514,11 +587,8 @@ modules.wallpaper = (function() {
           if (typeof showToast === 'function') showToast('Обои обновлены', 1500);
         } else {
           const offline = (typeof navigator !== 'undefined' && navigator.onLine === false);
-          const msg = offline
-            ? 'Нет подключения к интернету'
-            : 'Не удалось загрузить обои — проверьте сеть';
+          const msg = offline ? 'Нет подключения к интернету' : 'Не удалось загрузить обои';
           if (typeof showToast === 'function') showToast(msg, 3000);
-          console.warn('[Wallpaper] setAuto failed:', lastError);
         }
       }
     }
@@ -528,19 +598,34 @@ modules.wallpaper = (function() {
 
   function updateOffModeWidgetVisibility() {
     if (!document.body.classList.contains('off-mode')) return;
+    
     const hideClimate = storage.load('setting_offModeHideClimate') !== false;
     const hideApps = storage.load('setting_offModeHideApps') !== false;
     const hidePlayer = storage.load('setting_offModeHidePlayer') !== false;
+    const hideNetwork = storage.load('setting_offModeHideNetwork') !== false;
+    const hideMiniMap = storage.load('setting_offModeHideMiniMap') !== false;
     const hideRightButtons = storage.load('setting_offModeHideRightButtons') !== false;
 
     const climateWidget = document.querySelector('.widget_climate');
     const appsWidget = document.querySelector('.widget_apps');
     const playerWidget = document.querySelector('.widget_player');
+    const networkWrapper = document.getElementById('networkWidgetWrapper');
+    const networkBtn = document.getElementById('btnNetwork'); 
+    const miniMapWidget = document.getElementById('widgetNavigation');
     const rightButtons = document.querySelector('.right-buttons');
 
     if (climateWidget) climateWidget.classList.toggle('off-mode-hidden', hideClimate);
     if (appsWidget) appsWidget.classList.toggle('off-mode-hidden', hideApps);
     if (playerWidget) playerWidget.classList.toggle('off-mode-hidden', hidePlayer);
+    
+    if (networkWrapper) {
+      networkWrapper.classList.toggle('off-mode-hidden', hideNetwork);
+      if (networkBtn) {
+        networkBtn.style.display = hideNetwork ? 'none' : 'flex';
+      }
+    }
+    
+    if (miniMapWidget) miniMapWidget.classList.toggle('off-mode-hidden', hideMiniMap);
     if (rightButtons) rightButtons.classList.toggle('off-mode-hidden', hideRightButtons);
   }
 
@@ -557,11 +642,16 @@ modules.wallpaper = (function() {
   function setOff() {
     clearVideoBackground();
     stopAutoTimer();
+    stopBuiltinAutoTimer();
     document.body.style.backgroundImage = "none";
     document.body.style.backgroundColor = "#0F0D13";
     document.body.classList.add('off-mode');
     document.body.classList.remove('widgets-hidden');
     storage.save('widgetsHiddenByUser', false);
+
+    const twPre = document.querySelector('.widget_time');
+    if (twPre) twPre.classList.remove('animation-done');
+    document.body.classList.remove('returning-from-off');
 
     updateOffModeWidgetVisibility();
     showOffModeHint();
@@ -596,111 +686,164 @@ modules.wallpaper = (function() {
     const hint = document.querySelector('.off-mode-hint');
     if (hint) hint.remove();
 
+    const networkWrapper = document.getElementById('networkWidgetWrapper');
+    const networkBtn = document.getElementById('btnNetwork');
+    if (networkWrapper) {
+      networkWrapper.classList.remove('widget-hidden');
+      networkWrapper.classList.remove('off-mode-hidden');
+    }
+    if (networkBtn) {
+      networkBtn.classList.remove('widget-hidden');
+      networkBtn.style.display = 'flex';
+    }
+
     const tw = document.querySelector('.widget_time');
     if (tw) {
-      tw.classList.add('moon-returning');
-      const cleanup = () => {
-        tw.classList.remove('moon-returning');
-        tw.removeEventListener('animationend', cleanup);
+      tw.classList.remove('animation-done');
+      document.body.classList.add('returning-from-off');
+      const onAnimEnd = (e) => {
+        if (e.animationName === 'moonSet') {
+          document.body.classList.remove('returning-from-off');
+          tw.classList.add('animation-done');
+          tw.removeEventListener('animationend', onAnimEnd);
+        }
       };
-      tw.addEventListener('animationend', cleanup);
+      tw.addEventListener('animationend', onAnimEnd);
       setTimeout(() => {
-        if (tw.classList.contains('moon-returning')) cleanup();
+        if (document.body.classList.contains('returning-from-off')) {
+          document.body.classList.remove('returning-from-off');
+          tw.removeEventListener('animationend', onAnimEnd);
+          tw.classList.add('animation-done');
+        }
       }, 1500);
     }
 
-    document.querySelectorAll('.widget_climate, .widget_apps, .widget_player, .right-buttons')
+    document.querySelectorAll('.widget_climate, .widget_apps, .widget_player, .right-buttons, #networkWidgetWrapper, #widgetNavigation')
       .forEach(w => w.classList.remove('off-mode-hidden'));
-
-    // [UX] Позиция кнопки сети больше не восстанавливается — она встроена в плеер
   }
 
-  function setCustomByIndex(index) {
+  async function resolveStaticSrc(item) {
+    if (!item) return null;
+    if (item.isBuiltin) return item.src;
+    const data = await idbStore.get(IDB_CUSTOM_WALLPAPER_DATA_PREFIX + item.id);
+    return data || null;
+  }
+
+  async function setCustomByIndex(index, restartTimer = false) {
     clearVideoBackground();
     stopAutoTimer();
+    if (!restartTimer) stopBuiltinAutoTimer();
+
     if (!staticWallpapers.length) return;
+    const prevIndex = storage.load('customWallpaperIndex');
     const safeIndex = Math.max(0, Math.min(index, staticWallpapers.length - 1));
+    const item = staticWallpapers[safeIndex];
+    if (!item) return;
+    const src = await resolveStaticSrc(item);
+    if (!src) {
+      if (typeof prevIndex === 'number' && prevIndex >= 0 && prevIndex < staticWallpapers.length) {
+        customWallpaperIndex = prevIndex;
+      }
+      return;
+    }
+    
     customWallpaperIndex = safeIndex;
-    const src = staticWallpapers[safeIndex];
-    document.body.style.backgroundImage = `url(${src})`;
+    document.body.style.backgroundImage = `url("${src}")`;
     document.body.classList.remove('off-mode', 'has-video-background');
     storage.save('wallpaperMode', 'custom');
     storage.save('wallpaperCustom', src);
+    storage.save('wallpaperCustomId', item.id);
     storage.save('customWallpaperIndex', safeIndex);
     syncButtonState(false);
+    
+    if (restartTimer) startBuiltinAutoTimer();
   }
 
   function nextCustom() {
     if (storage.load('wallpaperMode') !== 'custom') return;
     let idx = storage.load('customWallpaperIndex');
-    if (idx === null || idx === undefined) {
-      const currentBg = document.body.style.backgroundImage;
-      if (currentBg && currentBg !== 'none') {
-        const match = currentBg.match(/url\("?(.+?)"?\)/);
-        if (match && match[1]) {
-          const foundIndex = staticWallpapers.findIndex(src =>
-            match[1].includes(src.replace(/^.*[\\\/]/, '')));
-          if (foundIndex !== -1) idx = foundIndex;
-        }
+    if (idx === null || idx === undefined) idx = customWallpaperIndex;
+    if (idx === null || idx === undefined) idx = 0;
+    const next = (idx + 1) % Math.max(staticWallpapers.length, 1);
+    setCustomByIndex(next, true);
+  }
+
+  async function rebuildStaticWallpapers() {
+    const hiddenRaw = storage.load(HIDDEN_BUILTINS_KEY);
+    const hidden = Array.isArray(hiddenRaw) ? hiddenRaw : [];
+
+    const visibleBuiltins = builtinWallpapersMeta.filter(b => !hidden.includes(b.id));
+
+    let userList = [];
+    try {
+      const raw = await idbStore.get(IDB_CUSTOM_WALLPAPERS_KEY);
+      if (Array.isArray(raw)) userList = raw;
+    } catch (e) {}
+
+    userList.sort((a, b) => (a.addedAt || 0) - (b.addedAt || 0));
+
+    staticWallpapers = [
+      ...visibleBuiltins.map(b => ({ id: b.id, name: b.name, src: b.src, isBuiltin: true })),
+      ...userList.map(u => ({ id: u.id, name: u.name, src: null, isBuiltin: false }))
+    ];
+
+    const savedIdx = storage.load('customWallpaperIndex');
+    if (savedIdx !== null && savedIdx !== undefined) {
+      if (savedIdx >= staticWallpapers.length) {
+        customWallpaperIndex = 0;
+        storage.save('customWallpaperIndex', 0);
+      } else {
+        customWallpaperIndex = savedIdx;
       }
-      if (idx === null || idx === undefined) idx = customWallpaperIndex;
-      if (idx === null || idx === undefined) idx = 0;
     }
-    setCustomByIndex((idx + 1) % staticWallpapers.length);
   }
 
   async function restore() {
     if (storage.load('wallpaperImage')) {
       storage.remove('wallpaperImage');
       storage.remove('wallpaper_cache');
-      console.log('[Wallpaper] stale localStorage cache cleaned');
     }
 
     let mode = storage.load('wallpaperMode');
-    // [FIX] Fallback при первом запуске
     if (!mode) {
       mode = 'custom';
       storage.save('wallpaperMode', 'custom');
     }
     updateServers(storage.load('wallpaperServers'));
 
+    await rebuildStaticWallpapers();
+
     if (mode === 'custom') {
       clearVideoBackground();
       stopAutoTimer();
+      stopBuiltinAutoTimer();
       let savedIdx = storage.load('customWallpaperIndex');
-      const bg = storage.load('wallpaperCustom');
       if (savedIdx !== null && savedIdx !== undefined && savedIdx >= 0 && savedIdx < staticWallpapers.length) {
-        customWallpaperIndex = savedIdx;
-        document.body.style.backgroundImage = `url(${staticWallpapers[savedIdx]})`;
-      } else if (bg && bg !== 'none') {
-        document.body.style.backgroundImage = `url(${bg})`;
-        const foundIndex = staticWallpapers.findIndex(src => bg.includes(src.replace(/^.*[\\\/]/, '')));
-        if (foundIndex !== -1) {
-          customWallpaperIndex = foundIndex;
-          storage.save('customWallpaperIndex', foundIndex);
-        }
+        await setCustomByIndex(savedIdx, true);
       } else {
-        setCustomByIndex(0);
+        await setCustomByIndex(0, true);
       }
       document.body.classList.remove('off-mode');
     } else if (mode === 'auto') {
       clearVideoBackground();
       startAutoTimer();
+      stopBuiltinAutoTimer();
       const saved = await idbStore.get(IDB_CURRENT_KEY);
       if (saved) {
         await applyWallpaper(saved);
         preloadNextWallpaper();
       } else {
-        setAuto(false);
+        await setAuto(false);
       }
     } else if (mode === 'video') {
       clearVideoBackground();
       stopAutoTimer();
+      stopBuiltinAutoTimer();
       const savedVideo = storage.load('wallpaperVideo');
       if (savedVideo) setVideoBackground(savedVideo);
-      else setCustomByIndex(0);
+      else await setCustomByIndex(0);
     } else {
-      setCustomByIndex(0);
+      await setCustomByIndex(0, true);
     }
 
     const wasHidden = storage.load('widgetsHiddenByUser');
@@ -719,7 +862,7 @@ modules.wallpaper = (function() {
 
     if (currentMode === 'auto') {
       const idx = storage.load('customWallpaperIndex') || 0;
-      setCustomByIndex(idx);
+      await setCustomByIndex(idx, true);
       if (btn) btn.classList.remove('active');
       if (typeof showToast === 'function') showToast('Автосмена обоев выключена', 1500);
       return false;
@@ -737,6 +880,9 @@ modules.wallpaper = (function() {
       startAutoTimer();
       preloadNextWallpaper();
     }
+    if (storage.load('wallpaperMode') === 'custom') {
+      startBuiltinAutoTimer();
+    }
     syncButtonState(true);
   }
 
@@ -745,10 +891,47 @@ modules.wallpaper = (function() {
       stopAutoTimer();
       startAutoTimer();
       const intervalText = storage.load('autoWallpaperInterval');
-      if (intervalText !== 'Никогда') {
-        setAuto(false);
-      }
+      if (intervalText !== 'Никогда') setAuto(false);
     }
+  }
+
+  async function saveUserWallpaperInternal(name, base64) {
+    const list = (await idbStore.get(IDB_CUSTOM_WALLPAPERS_KEY)) || [];
+    if (!Array.isArray(list)) return null;
+    const id = 'user_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
+    const meta = { id, name, addedAt: Date.now() };
+    await idbStore.set(IDB_CUSTOM_WALLPAPER_DATA_PREFIX + id, base64);
+    list.push(meta);
+    await idbStore.set(IDB_CUSTOM_WALLPAPERS_KEY, list);
+    return meta;
+  }
+
+  async function deleteUserWallpaperInternal(id) {
+    const list = (await idbStore.get(IDB_CUSTOM_WALLPAPERS_KEY)) || [];
+    const filtered = list.filter(item => item.id !== id);
+    await idbStore.set(IDB_CUSTOM_WALLPAPERS_KEY, filtered);
+    await idbStore.remove(IDB_CUSTOM_WALLPAPER_DATA_PREFIX + id);
+  }
+
+  function hideBuiltinInternal(id) {
+    const raw = storage.load(HIDDEN_BUILTINS_KEY);
+    const list = Array.isArray(raw) ? raw : [];
+    if (!list.includes(id)) {
+      list.push(id);
+      storage.save(HIDDEN_BUILTINS_KEY, list);
+    }
+  }
+
+  function restoreBuiltinInternal(id) {
+    const raw = storage.load(HIDDEN_BUILTINS_KEY);
+    const list = Array.isArray(raw) ? raw : [];
+    const filtered = list.filter(x => x !== id);
+    storage.save(HIDDEN_BUILTINS_KEY, filtered);
+  }
+
+  function getHiddenBuiltins() {
+    const raw = storage.load(HIDDEN_BUILTINS_KEY);
+    return Array.isArray(raw) ? raw : [];
   }
 
   return {
@@ -758,6 +941,22 @@ modules.wallpaper = (function() {
     exitOffMode,
     updateOffModeWidgetVisibility,
     clearCache,
-    testServerUrl
+    testServerUrl,
+    rebuildStaticWallpapers,
+    getStaticList: () => staticWallpapers.slice(),
+    getBuiltinMeta: () => builtinWallpapersMeta.slice(),
+    saveUserWallpaperInternal,
+    deleteUserWallpaperInternal,
+    hideBuiltinInternal,
+    restoreBuiltinInternal,
+    getHiddenBuiltins,
+    resolveStaticSrc,
+    restartBuiltinAutoTimer: startBuiltinAutoTimer,
+    FIXED_PEIZAZHI_URL,
+    FIXED_CARS_URL,
+    FIXED_LOVE_URL,
+    FIXED_THEME_URL,
+    FIXED_ANIMALS_URL,
+    FIXED_DYNAMIC_URL
   };
 })();

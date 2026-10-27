@@ -1,8 +1,7 @@
 /**********************************************
- * Модуль: Настройки приборной панели
- * [FIX] fuelDisplayMode: сохраняется и 'liters'/'percent', и 'Литры'/'Проценты'.
- * [FIX] Версия в разделе «О панели» берётся из window.MANIFEST.version
- *       (manifest.js), а не из fetch(manifest.json) — работает на file://.
+ * Модуль: Настройки приборной панели (модалка)
+ * Отвечает ТОЛЬКО за модальное окно настроек.
+ * Настройки автосмены обоев в сайдбаре — см. sidebar-settings.js
  **********************************************/
 
 modules.settings = (function() {
@@ -12,9 +11,22 @@ modules.settings = (function() {
 
   console.log('[Settings] Модуль загружен');
 
-  const DEFAULT_CUSTOM_SERVER_URL = 'https://bingw.jasonzeng.dev/?resolution=1920x1080&index=random';
-
   const settingsConfig = {
+    widgets: {
+      title: 'Виджеты',
+      settings: [
+        { id: 'showClock', type: 'toggle', label: 'Показывать виджет часов', default: true },
+        { id: 'showClimate', type: 'toggle', label: 'Показывать виджет климата', default: true },
+        { id: 'showApps', type: 'toggle', label: 'Показывать виджет приложений', default: true },
+        { id: 'showWeather', type: 'toggle', label: 'Показывать виджет погоды', default: false },
+        { id: 'showMiniMap', type: 'toggle', label: 'Показывать виджет мини-карты', default: false },
+        { id: 'showPlayer', type: 'toggle', label: 'Показывать виджет плеера', default: true },
+        { id: 'miniMapTheme', type: 'select', label: 'Тема мини-карты', options: ['День', 'Ночь', 'Авто'], default: 'Ночь' },
+        { id: 'widgetSize', type: 'range', label: 'Размер виджетов', min: 9, max: 20, step: 0.5, default: 13.5, unit: 'rem' },
+        { id: 'widgetOpacity', type: 'range', label: 'Прозрачность виджетов и кнопок', min: 0.3, max: 1, step: 0.01, default: 1, unit: '' },
+        { id: 'widgetBlur', type: 'range', label: 'Размытие фона', min: 0, max: 20, step: 1, default: 10, unit: 'px' }
+      ]
+    },
     climate: {
       title: 'Климат',
       settings: [
@@ -33,6 +45,7 @@ modules.settings = (function() {
     clock: {
       title: 'Часы',
       settings: [
+        { id: 'showClockWeather', type: 'toggle', label: 'Показывать температуру в часах', default: true },
         { id: 'showDate', type: 'toggle', label: 'Показывать дату', default: true },
         { id: 'showWeekday', type: 'toggle', label: 'Показывать день недели', default: true },
         { id: 'nightModeOnClockTap', type: 'toggle', label: 'Ночной режим по нажатию на часы', default: true }
@@ -53,46 +66,11 @@ modules.settings = (function() {
         { id: 'showAppLabels', type: 'toggle', label: 'Показывать названия приложений', default: false }
       ]
     },
-    widgets: {
-      title: 'Виджеты',
-      settings: [
-        { id: 'widgetSize', type: 'range', label: 'Размер виджетов', min: 9, max: 20, step: 0.5, default: 13.5, unit: 'rem' },
-        { id: 'widgetOpacity', type: 'range', label: 'Прозрачность виджетов и кнопок', min: 0.3, max: 1, step: 0.01, default: 1, unit: '' },
-        { id: 'widgetBlur', type: 'range', label: 'Размытие фона', min: 0, max: 20, step: 1, default: 10, unit: 'px' }
-      ]
-    },
-    wallpaper: {
-      title: 'Обои',
-      settings: [
-        { id: 'autoWallpaperInterval', type: 'select', label: 'Время смены автообоев', options: ['Никогда', '30 секунд', '1 минута', '2 минуты', '5 минут', '10 минут', '30 минут', '1 час'], default: '5 минут' },
-        { id: 'wallpaperServers', type: 'multiselect', label: 'Серверы для автообоев', options: [
-          { value: 'loremflickr', label: 'LoremFlickr' },
-          { value: 'loremflickrcn', label: 'LoremFlickr CN (Россия)' },
-          { value: 'picsum_proxy', label: 'Picsum Proxy (Россия)' },
-          { value: 'picsum', label: 'Picsum' },
-          { value: 'placekitten', label: 'PlaceKitten' }
-        ], default: ['loremflickr'] },
-        { id: 'wallpaperCustomServer', type: 'text', label: 'Свой сервер (URL)', default: DEFAULT_CUSTOM_SERVER_URL, placeholder: 'https://example.com/image.jpg (можно {w} и {h})' }
-      ]
-    },
-    network: {
-      title: 'Виджет сети и данных',
-      settings: [
-        { id: 'showNetworkStatus', type: 'toggle', label: 'Показывать виджет (сеть, топливо, АКБ)', default: true }
-      ]
-    },
     behavior: {
       title: 'Поведение',
       settings: [
         { id: 'tapToChangeWallpaper', type: 'toggle', label: 'Тап по фону → смена обоев', default: true },
         { id: 'doubleTapToHideWidgets', type: 'toggle', label: 'Двойной тап по фону → скрыть виджеты', default: false }
-      ]
-    },
-    footer: {
-      title: 'Нижняя подпись',
-      settings: [
-        { id: 'showFooterText', type: 'toggle', label: 'Показывать подпись', default: true },
-        { id: 'footerText', type: 'text', label: 'Текст подписи', default: 'ТенеТ Т8 Вместе к новым свершениям ТенеТ Т8', placeholder: 'Введите текст подписи' }
       ]
     },
     offMode: {
@@ -101,6 +79,8 @@ modules.settings = (function() {
         { id: 'offModeHideClimate', type: 'toggle', label: 'Скрывать климат в OFF-mode', default: true },
         { id: 'offModeHideApps', type: 'toggle', label: 'Скрывать приложения в OFF-mode', default: true },
         { id: 'offModeHidePlayer', type: 'toggle', label: 'Скрывать плеер в OFF-mode', default: true },
+        { id: 'offModeHideNetwork', type: 'toggle', label: 'Скрывать виджет сети и данных', default: true },
+        { id: 'offModeHideMiniMap', type: 'toggle', label: 'Скрывать мини-карту в OFF-mode', default: true },
         { id: 'offModeHideRightButtons', type: 'toggle', label: 'Скрывать правые кнопки в OFF-mode', default: true }
       ]
     },
@@ -113,6 +93,8 @@ modules.settings = (function() {
       ]
     }
   };
+
+  // ---------- load / save ----------
 
   function loadSetting(key) {
     const saved = storage.load(`setting_${key}`);
@@ -140,6 +122,20 @@ modules.settings = (function() {
     return value === 'liters' ? 'Литры' : 'Проценты';
   }
 
+  function miniMapThemeToStorage(uiValue) {
+    if (uiValue === 'Ночь') return 'night';
+    if (uiValue === 'Авто') return 'auto';
+    return 'day';
+  }
+
+  function miniMapThemeFromStorage(stored) {
+    if (stored === 'night') return 'Ночь';
+    if (stored === 'auto') return 'Авто';
+    return 'День';
+  }
+
+  // ---------- apply ----------
+
   function applySetting(key, value) {
     if (isApplyingSetting) return;
     isApplyingSetting = true;
@@ -157,14 +153,14 @@ modules.settings = (function() {
             if (rightButtons) rightButtons.style.height = value + 'rem';
             const timeWidget = document.querySelector('.widget_time');
             if (timeWidget) timeWidget.style.width = value + 'rem';
+            const navWidget = document.getElementById('widgetNavigation');
+            if (navWidget) navWidget.style.width = value + 'rem';
           }, 10);
           break;
         }
-        case 'widgetOpacity':
-          applyOpacity(value);
-          break;
+        case 'widgetOpacity': applyOpacity(value); break;
         case 'widgetBlur':
-          document.querySelectorAll('.widget, .picker-drawer, .sidebar, .modal-content').forEach(el => {
+          document.querySelectorAll('.widget, .picker-drawer, .sidebar, .modal-content, .settings-modal-content, .right-buttons').forEach(el => {
             el.style.backdropFilter = `blur(${value}px)`;
           });
           break;
@@ -178,9 +174,7 @@ modules.settings = (function() {
           if (weekdayDisplay) weekdayDisplay.style.display = value ? 'block' : 'none';
           break;
         }
-        case 'tapToChangeWallpaper':
-          storage.save('tapToChangeWallpaper', value);
-          break;
+        case 'tapToChangeWallpaper': storage.save('tapToChangeWallpaper', value); break;
         case 'nightModeOnClockTap':
           storage.save('nightModeOnClockTap', value);
           updateClockTapHandler();
@@ -210,38 +204,65 @@ modules.settings = (function() {
           if (modules.fuel && typeof modules.fuel.refreshDisplay === 'function') modules.fuel.refreshDisplay();
           break;
         }
-        case 'showNetworkStatus':
-          storage.save('setting_showNetworkStatus', value);
-          updateNetworkStatusVisibility(value);
-          break;
-        case 'autoWallpaperInterval':
-          storage.save('autoWallpaperInterval', value);
-          updateAutoWallpaperInterval(value);
-          break;
-        case 'wallpaperServers':
-          storage.save('wallpaperServers', value);
-          updateWallpaperServers(value);
-          break;
-        case 'wallpaperCustomServer': {
-          const val = typeof value === 'string' ? value.trim() : '';
-          storage.save('setting_wallpaperCustomServer', val);
-          if (modules.wallpaper && typeof modules.wallpaper.clearCache === 'function') {
-            modules.wallpaper.clearCache().catch(e => warn('[Settings] clearCache error:', e));
+        case 'showClockWeather':
+          storage.save('setting_showClockWeather', value);
+          if (modules.weather && typeof modules.weather.refreshClockDisplay === 'function') {
+            modules.weather.refreshClockDisplay();
           }
-          if (modules.wallpaper && typeof modules.wallpaper.updateServers === 'function') {
-            modules.wallpaper.updateServers(storage.load('wallpaperServers'));
+          break;
+        case 'showClock': {
+          storage.save('setting_showClock', value);
+          const clockWidget = document.querySelector('.widget_time');
+          if (clockWidget) clockWidget.classList.toggle('widget-hidden', !value);
+          break;
+        }
+        case 'showClimate': {
+          storage.save('setting_showClimate', value);
+          const climateWidget = document.querySelector('.widget_climate');
+          if (climateWidget) climateWidget.classList.toggle('widget-hidden', !value);
+          break;
+        }
+        case 'showApps': {
+          storage.save('setting_showApps', value);
+          const appsWidget = document.querySelector('.widget_apps');
+          if (appsWidget) appsWidget.classList.toggle('widget-hidden', !value);
+          break;
+        }
+        case 'showPlayer': {
+          storage.save('setting_showPlayer', value);
+          const playerWidget = document.querySelector('.widget_player');
+          if (playerWidget) playerWidget.classList.toggle('widget-hidden', !value);
+          break;
+        }
+        case 'showWeather': {
+          storage.save('setting_showWeather', value);
+          const weatherWidget = document.getElementById('widgetWeather');
+          if (weatherWidget) weatherWidget.classList.toggle('widget-hidden', !value);
+          break;
+        }
+        case 'showMiniMap':
+          storage.save('setting_showMiniMap', value);
+          if (modules.navigation && typeof modules.navigation.refresh === 'function') {
+            modules.navigation.refresh();
+          }
+          break;
+        case 'miniMapTheme': {
+          const storedTheme = miniMapThemeToStorage(value);
+          storage.save('setting_miniMapTheme', storedTheme);
+          if (modules.navigation && typeof modules.navigation.applyThemeNow === 'function') {
+            modules.navigation.applyThemeNow();
+          } else if (modules.navigation && typeof modules.navigation.refresh === 'function') {
+            modules.navigation.refresh();
           }
           break;
         }
-        case 'playerVolumeStep':
-          storage.save('playerVolumeStep', value);
-          break;
-        case 'autoRequestMusicState':
-          storage.save('autoRequestMusicState', value);
-          break;
+        case 'playerVolumeStep': storage.save('playerVolumeStep', value); break;
+        case 'autoRequestMusicState': storage.save('autoRequestMusicState', value); break;
         case 'volumeSwipeEnabled':
           storage.save('volumeSwipeEnabled', value);
-          updateVolumeSwipeEnabled(value);
+          if (modules.volumeSwipe && typeof modules.volumeSwipe.setEnabled === 'function') {
+            modules.volumeSwipe.setEnabled(value);
+          }
           break;
         case 'appsSlotsCount':
           storage.save('appsSlotsCount', value);
@@ -254,18 +275,13 @@ modules.settings = (function() {
             modules.apps.updateAppLabels(value);
           }
           break;
-        case 'showFooterText':
-          storage.save('showFooterText', value);
-          updateFooterVisibility(value);
-          break;
-        case 'footerText':
-          storage.save('footerText', value);
-          updateFooterText(value);
-          break;
         case 'offModeHideClimate':
         case 'offModeHideApps':
         case 'offModeHidePlayer':
+        case 'offModeHideNetwork':
+        case 'offModeHideMiniMap':
         case 'offModeHideRightButtons':
+          storage.save(`setting_${key}`, value);
           if (modules.wallpaper && typeof modules.wallpaper.updateOffModeWidgetVisibility === 'function') {
             modules.wallpaper.updateOffModeWidgetVisibility();
           }
@@ -276,11 +292,7 @@ modules.settings = (function() {
     }
   }
 
-  function updateVolumeSwipeEnabled(enabled) {
-    if (modules.volumeSwipe && typeof modules.volumeSwipe.setEnabled === 'function') {
-      modules.volumeSwipe.setEnabled(enabled);
-    }
-  }
+  // ---------- helpers (не зависят от сайдбара) ----------
 
   function applyOpacity(value) {
     document.documentElement.style.setProperty('--widget-opacity', value);
@@ -292,22 +304,11 @@ modules.settings = (function() {
     element.style.setProperty('--widget-opacity', 'var(--widget-opacity, 1)');
   }
 
-  function updateWallpaperServers(selectedServers) {
-    if (modules.wallpaper && typeof modules.wallpaper.updateServers === 'function') {
-      modules.wallpaper.updateServers(selectedServers);
-    }
-    if (storage.load('wallpaperMode') === 'auto' && modules.wallpaper && typeof modules.wallpaper.setAuto === 'function') {
-      modules.wallpaper.setAuto(true);
-    }
-  }
-
   function updateAppsSlotsCount(count) {
     const appsWidget = document.querySelector('.widget_apps');
     if (!appsWidget || !Number.isFinite(count) || count <= 0) return;
-
     const slots = document.querySelectorAll('.app_slot');
     const currentCount = slots.length;
-
     if (count < currentCount) {
       for (let i = currentCount; i > count; i--) {
         document.querySelector(`.app_slot[data-slot="${i}"]`)?.remove();
@@ -322,7 +323,6 @@ modules.settings = (function() {
         appsWidget.appendChild(newSlot);
       }
     }
-
     const widgetSize = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--widget-size')) || 13.5;
     const gap = 0.55;
     const padding = 1.16;
@@ -376,7 +376,6 @@ modules.settings = (function() {
         slot.style.minHeight = '0';
       });
     }
-
     let slotSize = (widgetSize - padding - gap) / 2;
     if (slotSize < 2.5) slotSize = 2.5;
     if (slotSize > 8) slotSize = 8;
@@ -387,9 +386,7 @@ modules.settings = (function() {
         img.style.height = (slotSize * 0.45) + 'rem';
       }
     });
-
     if (modules.apps && typeof modules.apps.reinitSlots === 'function') modules.apps.reinitSlots();
-    console.log('[Settings] Количество слотов приложений установлено:', count);
   }
 
   function updateAppLabels(show) {
@@ -422,58 +419,10 @@ modules.settings = (function() {
     if (offButton) offButton.style.display = loadSetting('climateOffButton') ? 'flex' : 'none';
   }
 
-  function updateNetworkStatusVisibility(isVisible) {
-    const widget = document.getElementById('widgetPlaceholder');
-    if (widget) {
-      widget.classList.toggle('widget-hidden', !isVisible);
-    }
-    if (modules.network && typeof modules.network.setVisible === 'function') {
-      try { modules.network.setVisible(); } catch (e) { /* noop */ }
-    }
-  }
-
-  function updateFooterVisibility(isVisible) {
-    const footer = document.getElementById('editableBrand');
-    if (footer) footer.style.display = isVisible ? 'block' : 'none';
-  }
-
-  function updateFooterText(text) {
-    const footer = document.getElementById('editableBrand');
-    if (footer && text) footer.textContent = text;
-  }
-
-  function updateAutoWallpaperInterval(intervalText) {
-    if (intervalText === 'Никогда') {
-      storage.save('autoWallpaperIntervalMs', 0);
-      if (modules.wallpaper && typeof modules.wallpaper.restartAutoMode === 'function') {
-        modules.wallpaper.restartAutoMode();
-      }
-      console.log('[Settings] Автосмена обоев: никогда');
-      return;
-    }
-    let intervalMs = 300000;
-    switch (intervalText) {
-      case '30 секунд': intervalMs = 30000; break;
-      case '1 минута': intervalMs = 60000; break;
-      case '2 минуты': intervalMs = 120000; break;
-      case '5 минут': intervalMs = 300000; break;
-      case '10 минут': intervalMs = 600000; break;
-      case '30 минут': intervalMs = 1800000; break;
-      case '1 час': intervalMs = 3600000; break;
-    }
-    storage.save('autoWallpaperIntervalMs', intervalMs);
-    if (modules.wallpaper && typeof modules.wallpaper.restartAutoMode === 'function') {
-      modules.wallpaper.restartAutoMode();
-    } else if (storage.load('wallpaperMode') === 'auto' && modules.wallpaper && typeof modules.wallpaper.setAuto === 'function') {
-      modules.wallpaper.setAuto(true);
-    }
-  }
-
   function updateClimateSlotsCount(count) {
     const climateWidget = document.querySelector('.widget_climate_2x3');
     const climateGrid = document.querySelector('.climate-grid_2x3');
     if (!climateGrid || !climateWidget || !Number.isFinite(count) || count <= 0) return;
-
     const slots = document.querySelectorAll('.climate_slot');
     const currentCount = slots.length;
     const widgetHeight = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--widget-size')) || 13.5;
@@ -483,7 +432,6 @@ modules.settings = (function() {
     let slotSize = availableHeight / 2;
     if (slotSize < 2.5) slotSize = 2.5;
     if (slotSize > 8) slotSize = 8;
-
     let newWidth = 0;
     if (count === 4) {
       newWidth = (slotSize * 2) + (gap * 1);
@@ -498,7 +446,6 @@ modules.settings = (function() {
     newWidth = newWidth + padding;
     climateGrid.style.gridTemplateRows = 'repeat(2, 1fr)';
     climateWidget.style.width = newWidth + 'rem';
-
     if (count < currentCount) {
       for (let i = currentCount; i > count; i--) {
         document.querySelector(`.climate_slot[data-climate-slot="${i}"]`)?.remove();
@@ -513,7 +460,6 @@ modules.settings = (function() {
         climateGrid.appendChild(newSlot);
       }
     }
-
     document.querySelectorAll('.climate_slot').forEach(slot => {
       slot.style.aspectRatio = '1 / 1';
       slot.style.width = '100%';
@@ -536,10 +482,8 @@ modules.settings = (function() {
         });
       }
     });
-
     const currentColor = loadSetting('climateIconColor');
     if (currentColor) updateClimateIconColor(currentColor);
-
     const offButton = document.getElementById('climateOffAll');
     if (offButton && loadSetting('climateOffButton')) {
       if (count === 4) { offButton.style.left = '50%'; offButton.style.transform = 'translate(-50%, -50%)'; }
@@ -554,7 +498,6 @@ modules.settings = (function() {
         svg.style.height = (newSize * 0.45) + 'rem';
       }
     }
-
     if (modules.climate && typeof modules.climate.reinitSlots === 'function') modules.climate.reinitSlots();
     storage.save('climateSlotsCount', count);
   }
@@ -571,6 +514,8 @@ modules.settings = (function() {
       }
     });
   }
+
+  // ---------- QR ----------
 
   function addQrModalStyles() {
     if (document.getElementById('qr-modal-styles')) return;
@@ -649,7 +594,6 @@ modules.settings = (function() {
     const container = document.createElement('div');
     container.className = 'settings-qr-container';
     container.style.cssText = 'display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0.5rem 0; gap: 0.5rem; cursor: pointer;';
-
     const qrImg = document.createElement('img');
     qrImg.src = 'images/Qrkod.png';
     qrImg.alt = 'QR-код для поддержки автора';
@@ -666,7 +610,6 @@ modules.settings = (function() {
       e.stopPropagation();
       showExpandedQr(qrImg.src);
     });
-
     const qrText = document.createElement('div');
     qrText.className = 'settings-qr-text';
     qrText.innerHTML = '✨ Если Вам нравится моя работа,<br>подтвердите это переходом по QR ✨';
@@ -683,6 +626,8 @@ modules.settings = (function() {
     container.appendChild(qrText);
     return container;
   }
+
+  // ---------- form controls ----------
 
   function createRangeInput(setting, currentValue) {
     const container = document.createElement('div');
@@ -725,75 +670,22 @@ modules.settings = (function() {
     return select;
   }
 
-  function createMultiSelect(setting, currentValue) {
-    const container = document.createElement('div');
-    container.className = 'settings-multiselect-container';
-    container.style.cssText = 'display: flex; flex-direction: column; gap: 0.5rem; flex: 1;';
-    const selectedArray = Array.isArray(currentValue) ? currentValue : setting.default;
-    setting.options.forEach(opt => {
-      const label = document.createElement('label');
-      label.style.cssText = 'display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.75rem; color: rgba(238,242,247,0.85);';
-      const checkbox = document.createElement('input');
-      checkbox.type = 'checkbox';
-      checkbox.value = opt.value;
-      checkbox.checked = selectedArray.includes(opt.value);
-      checkbox.style.cssText = 'width: 1rem; height: 1rem; cursor: pointer;';
-      const span = document.createElement('span');
-      span.textContent = opt.label;
-      label.appendChild(checkbox);
-      label.appendChild(span);
-      checkbox.addEventListener('change', () => {
-        let newSelection = selectedArray;
-        if (checkbox.checked) {
-          if (!newSelection.includes(opt.value)) newSelection = [...newSelection, opt.value];
-        } else {
-          newSelection = newSelection.filter(v => v !== opt.value);
-        }
-        saveSetting(setting.id, newSelection);
-      });
-      container.appendChild(label);
-    });
-    const buttonContainer = document.createElement('div');
-    buttonContainer.style.cssText = 'display: flex; gap: 0.5rem; margin-top: 0.5rem;';
-    const selectAllBtn = document.createElement('button');
-    selectAllBtn.textContent = 'Выбрать все';
-    selectAllBtn.style.cssText = 'padding: 0.25rem 0.5rem; font-size: 0.65rem; background: rgba(255,255,255,0.1); border: none; border-radius: 0.5rem; cursor: pointer; color: inherit;';
-    const deselectAllBtn = document.createElement('button');
-    deselectAllBtn.textContent = 'Снять все';
-    deselectAllBtn.style.cssText = 'padding: 0.25rem 0.5rem; font-size: 0.65rem; background: rgba(255,255,255,0.1); border: none; border-radius: 0.5rem; cursor: pointer; color: inherit;';
-    selectAllBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const allValues = setting.options.map(opt => opt.value);
-      saveSetting(setting.id, allValues);
-      container.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = true);
-    });
-    deselectAllBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      saveSetting(setting.id, []);
-      container.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
-    });
-    buttonContainer.appendChild(selectAllBtn);
-    buttonContainer.appendChild(deselectAllBtn);
-    container.appendChild(buttonContainer);
-    return container;
-  }
-
   function createToggle(setting, currentValue) {
     const toggle = document.createElement('button');
+    toggle.type = 'button';
     toggle.className = `settings-toggle ${currentValue ? 'active' : ''}`;
     toggle.innerHTML = currentValue ? 'Вкл' : 'Выкл';
-    const newToggle = toggle.cloneNode(true);
-    newToggle.addEventListener('click', (e) => {
+    toggle.addEventListener('click', (e) => {
       e.stopPropagation();
       e.preventDefault();
-      const isActive = newToggle.classList.contains('active');
+      const isActive = toggle.classList.contains('active');
       const newValue = !isActive;
-      newToggle.classList.toggle('active', newValue);
-      newToggle.innerHTML = newValue ? 'Вкл' : 'Выкл';
-      newToggle.blur();
+      toggle.classList.toggle('active', newValue);
+      toggle.innerHTML = newValue ? 'Вкл' : 'Выкл';
+      toggle.blur();
       saveSetting(setting.id, newValue);
     });
-    return newToggle;
+    return toggle;
   }
 
   function createTextInput(setting, currentValue) {
@@ -801,15 +693,23 @@ modules.settings = (function() {
     input.type = 'text';
     input.value = currentValue || setting.default || '';
     input.placeholder = setting.placeholder || '';
-    input.style.cssText = `flex:1;padding:0.5rem 0.75rem;font-size:0.75rem;background:linear-gradient(180deg,rgba(43,49,62,0.68),rgba(21,25,33,0.52));border:1px solid rgba(255,255,255,0.08);border-radius:0.75rem;color:rgba(238,242,247,0.85);outline:none;min-width:0;`;
-    if (document.body.classList.contains('light')) {
-      input.style.background = 'linear-gradient(180deg, rgba(255,255,255,0.72), rgba(231,236,245,0.52))';
-      input.style.borderColor = 'rgba(88,102,134,0.12)';
-      input.style.color = 'rgba(45,56,78,0.85)';
-    }
-    const apply = (v) => saveSetting(setting.id, v);
-    input.addEventListener('change', (e) => apply(e.target.value));
-    input.addEventListener('blur', (e) => apply(e.target.value));
+    input.className = 'settings-text-input';
+    let pendingTimer = null;
+    let lastSavedValue = input.value;
+    const commit = () => {
+      if (pendingTimer) { clearTimeout(pendingTimer); pendingTimer = null; }
+      const v = input.value;
+      if (v === lastSavedValue) return;
+      lastSavedValue = v;
+      saveSetting(setting.id, v);
+    };
+    const scheduleCommit = () => {
+      if (pendingTimer) clearTimeout(pendingTimer);
+      pendingTimer = setTimeout(commit, 500);
+    };
+    input.addEventListener('input', scheduleCommit);
+    input.addEventListener('change', commit);
+    input.addEventListener('blur', commit);
     return input;
   }
 
@@ -820,94 +720,16 @@ modules.settings = (function() {
     return info;
   }
 
-  function createServerPreview() {
-    const wrap = document.createElement('div');
-    wrap.className = 'settings-server-preview';
-    wrap.style.cssText = 'margin-top:0.5rem;display:none;';
-    const img = document.createElement('img');
-    img.alt = 'Превью сервера';
-    img.style.cssText = 'width:100%;max-height:120px;object-fit:cover;border-radius:0.75rem;border:1px solid rgba(255,255,255,0.1);background:rgba(0,0,0,0.2);';
-    img.onerror = () => { wrap.style.display = 'none'; };
-    img.onload = () => { wrap.style.display = 'block'; };
-    wrap.appendChild(img);
-    return wrap;
-  }
+  // ---------- full reset ----------
 
-  function createServerTestButton(inputElement, previewWrap) {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'settings-toggle';
-    btn.textContent = 'Проверить сервер';
-    btn.style.cssText = 'margin-left:0.5rem;white-space:nowrap;min-width:auto;padding:0.45rem 0.8rem;';
-    let busy = false;
-    const restoreLabel = () => {
-      busy = false; btn.disabled = false;
-      btn.classList.remove('active');
-      btn.textContent = 'Проверить сервер';
-      btn.style.borderColor = ''; btn.style.color = '';
-    };
-    btn.addEventListener('click', async (e) => {
-      e.stopPropagation(); e.preventDefault();
-      if (busy) return;
-      busy = true; btn.disabled = true;
-      btn.textContent = 'Проверка...';
-      btn.classList.add('active');
-      const url = (inputElement && typeof inputElement.value === 'string') ? inputElement.value.trim() : '';
-      try {
-        if (!modules.wallpaper || typeof modules.wallpaper.testServerUrl !== 'function') {
-          btn.textContent = '❌ Модуль обоев недоступен';
-          btn.classList.remove('active');
-          btn.style.borderColor = 'rgba(255,100,100,0.6)';
-          btn.style.color = 'rgba(255,150,150,0.95)';
-          setTimeout(restoreLabel, 4000);
-          return;
-        }
-        const result = await modules.wallpaper.testServerUrl(url);
-        if (result.ok) {
-          btn.textContent = '✅ Сервер доступен';
-          btn.style.borderColor = 'rgba(100,200,120,0.6)';
-          btn.style.color = 'rgba(160,240,180,0.95)';
-          if (previewWrap) {
-            const img = previewWrap.querySelector('img');
-            if (img) {
-              let previewUrl = url
-                .replace(/\{w\}/g, '1280').replace(/\{h\}/g, '720')
-                .replace(/%w%/g, '1280').replace(/%h%/g, '720');
-              if (!/[?&](t|lock|random)=/i.test(previewUrl)) {
-                previewUrl += (previewUrl.includes('?') ? '&' : '?') + 't=' + Date.now();
-              }
-              img.src = previewUrl;
-            }
-          }
-          if (typeof showToast === 'function') showToast(`Сервер доступен${result.details ? ' • ' + result.details : ''}`, 2500);
-        } else {
-          btn.textContent = '❌ ' + (result.reason || 'Ошибка');
-          btn.style.borderColor = 'rgba(255,100,100,0.6)';
-          btn.style.color = 'rgba(255,150,150,0.95)';
-          if (previewWrap) previewWrap.style.display = 'none';
-          if (typeof showToast === 'function') showToast(`Сервер недоступен: ${result.reason}`, 3500);
-        }
-      } catch (err) {
-        btn.textContent = '❌ Ошибка проверки';
-        btn.style.borderColor = 'rgba(255,100,100,0.6)';
-        btn.style.color = 'rgba(255,150,150,0.95)';
-        console.error('[Settings] testServer error:', err);
-        if (typeof showToast === 'function') showToast('Ошибка проверки сервера', 2500);
-      } finally {
-        setTimeout(restoreLabel, 4000);
-      }
-    });
-    return btn;
-  }
-
-  async function clearAllAppIconsFromIDB() {
+  async function clearAllAppIcons() {
     try {
       const slots = document.querySelectorAll('.app_slot');
       for (const slot of slots) {
         const key = `app_slot_${slot.dataset.slot}`;
         storage.remove(key);
       }
-    } catch (e) { warn('[Settings] clearAppIcons error', e); }
+    } catch (e) { console.warn(e); }
   }
 
   async function performFullReset() {
@@ -916,29 +738,36 @@ modules.settings = (function() {
       const slotId = slot.dataset.climateSlot;
       if (slotId) storage.remove(`climate_slot_${slotId}`);
     });
-    await clearAllAppIconsFromIDB();
+    await clearAllAppIcons();
     for (const category of Object.values(settingsConfig)) {
       for (const setting of category.settings) {
-        if (setting.type !== 'qr' && setting.type !== 'info') {
+        if (setting.type !== 'qr' && setting.type !== 'info' && setting.type !== 'button') {
           storage.remove(`setting_${setting.id}`);
         }
       }
     }
     const runtimeKeys = [
       'networkPos', 'wallpaperMode', 'wallpaperImage', 'wallpaperCustom',
-      'wallpaperVideo', 'wallpaper_cache', 'wallpaper_cache_index',
-      'customWallpaperIndex', 'autoWallpaperIntervalMs',
+      'wallpaperVideo', 'wallpaper_cache_index',
+      'customWallpaperIndex', 'autoWallpaperIntervalMs', 'autoWallpaperInterval',
+      'builtinWallpaperIntervalMs', 'builtinWallpaperInterval',
       'brandText', 'currentOpacity', 'widgetsHiddenByUser',
       'volumeSwipeHintShown', 'tapToChangeWallpaper', 'climateOffButton',
       'climateSlotsCount', 'climateIconColor', 'showNetworkStatus',
       'showDate', 'showWeekday', 'nightModeOnClockTap', 'appsSlotsCount',
       'showAppLabels', 'showFooterText', 'footerText',
-      'offModeHideClimate', 'offModeHideApps', 'offModeHidePlayer', 'offModeHideRightButtons',
-      'wallpaperCustomServer', 'setting_fuelTankSize', 'setting_fuelDisplayMode'
+      'offModeHideClimate', 'offModeHideApps', 'offModeHidePlayer',
+      'offModeHideRightButtons', 'offModeHideMiniMap', 'offModeHideNetwork',
+      'setting_wallpaperCustomServer', 'setting_wallpaperCustomServer2',
+      'setting_wallpaperCustomServerEnabled', 'setting_wallpaperCustomServer2Enabled',
+      'wallpaper_hidden_builtins', 'wallpaper_custom_list',
+      'climateTrunkOpen', 'setting_user_custom_url', 'setting_user_custom_enabled'
     ];
     runtimeKeys.forEach(k => storage.remove(k));
-    try { await idbStore.clear(); } catch (e) { warn('[Settings] IDB clear error', e); }
+    try { await idbStore.clear(); } catch (e) { console.warn(e); }
   }
+
+  // ---------- modal ----------
 
   function buildModal() {
     const modalOverlay = document.createElement('div');
@@ -957,14 +786,9 @@ modules.settings = (function() {
       </button>
     `;
     modalContent.appendChild(header);
-
     const body = document.createElement('div');
     body.className = 'settings-body';
-
-    // [FIX] Версия — из window.MANIFEST.version (manifest.js)
-    const currentAppVersion = (window.MANIFEST && window.MANIFEST.version)
-      ? String(window.MANIFEST.version)
-      : '—';
+    const currentAppVersion = (window.MANIFEST && window.MANIFEST.version) ? String(window.MANIFEST.version) : '—';
 
     for (const [, category] of Object.entries(settingsConfig)) {
       const section = document.createElement('div');
@@ -986,42 +810,16 @@ modules.settings = (function() {
         label.textContent = setting.label;
         label.style.flexShrink = '0';
         row.appendChild(label);
-
         let currentValue = loadSetting(setting.id);
-
-        if (setting.id === 'fuelDisplayMode') {
-          currentValue = fuelDisplayModeToUi(currentValue);
-        }
-
-        // [FIX] Версия — из window.MANIFEST.version
-        if (setting.id === 'version') {
-          currentValue = currentAppVersion;
-        }
+        if (setting.id === 'fuelDisplayMode') currentValue = fuelDisplayModeToUi(currentValue);
+        if (setting.id === 'version') currentValue = currentAppVersion;
+        if (setting.id === 'miniMapTheme') currentValue = miniMapThemeFromStorage(loadSetting('miniMapTheme'));
 
         switch (setting.type) {
           case 'range': row.appendChild(createRangeInput(setting, currentValue)); break;
           case 'select': row.appendChild(createSelect(setting, currentValue)); break;
-          case 'multiselect': row.appendChild(createMultiSelect(setting, currentValue)); break;
           case 'toggle': row.appendChild(createToggle(setting, currentValue)); break;
-          case 'text': {
-            const ti = createTextInput(setting, currentValue);
-            ti.style.marginLeft = '1rem';
-            row.appendChild(ti);
-            if (setting.id === 'wallpaperCustomServer') {
-              const previewWrap = createServerPreview();
-              const testBtn = createServerTestButton(ti, previewWrap);
-              row.appendChild(testBtn);
-              const previewRow = document.createElement('div');
-              previewRow.className = 'settings-row';
-              previewRow.style.flexDirection = 'column';
-              previewRow.style.alignItems = 'stretch';
-              previewRow.appendChild(previewWrap);
-              section.appendChild(row);
-              section.appendChild(previewRow);
-              continue;
-            }
-            break;
-          }
+          case 'text': row.appendChild(createTextInput(setting, currentValue)); break;
           case 'info': row.appendChild(createInfo({ ...setting, value: currentValue || '—' })); break;
         }
         section.appendChild(row);
@@ -1042,10 +840,8 @@ modules.settings = (function() {
       }
     });
     body.appendChild(resetBtn);
-
     modalContent.appendChild(body);
     modalOverlay.appendChild(modalContent);
-
     modalOverlay.querySelector('#settingsCloseBtn')?.addEventListener('click', (e) => {
       e.stopPropagation();
       close();
@@ -1088,7 +884,7 @@ modules.settings = (function() {
         if (appsCount) updateAppsSlotsCount(parseInt(appsCount, 10));
         const climateCount = loadSetting('climateSlotsCount');
         if (climateCount) updateClimateSlotsCount(parseInt(climateCount, 10));
-      } catch (e) { warn('[Settings] resize handler error:', e); }
+      } catch (e) { console.warn(e); }
     }, 200);
   }
 
@@ -1097,6 +893,7 @@ modules.settings = (function() {
     applySetting('widgetSize', loadSetting('widgetSize') || 13.5);
     applySetting('widgetOpacity', loadSetting('widgetOpacity') || 1);
     applySetting('widgetBlur', loadSetting('widgetBlur') || 10);
+    applySetting('showClockWeather', loadSetting('showClockWeather') !== false);
     applySetting('showDate', loadSetting('showDate') !== false);
     applySetting('showWeekday', loadSetting('showWeekday') !== false);
     applySetting('nightModeOnClockTap', loadSetting('nightModeOnClockTap') !== false);
@@ -1105,20 +902,27 @@ modules.settings = (function() {
     applySetting('climateIconColor', loadSetting('climateIconColor') || 'Белый');
     applySetting('fuelTankSize', loadSetting('fuelTankSize') || '60');
     applySetting('fuelDisplayMode', loadSetting('fuelDisplayMode') || 'Проценты');
-    applySetting('showNetworkStatus', loadSetting('showNetworkStatus') !== false);
-    applySetting('autoWallpaperInterval', loadSetting('autoWallpaperInterval') || '5 минут');
-    applySetting('wallpaperServers', loadSetting('wallpaperServers') || ['loremflickr']);
-    applySetting('wallpaperCustomServer', loadSetting('wallpaperCustomServer') || DEFAULT_CUSTOM_SERVER_URL);
+    applySetting('showWeather', loadSetting('showWeather') === true);
+    applySetting('showMiniMap', loadSetting('showMiniMap') === true);
+
+    const storedMiniMapTheme = loadSetting('miniMapTheme');
+    const uiMiniMapTheme = miniMapThemeFromStorage(storedMiniMapTheme);
+    applySetting('miniMapTheme', uiMiniMapTheme);
+
+    applySetting('showClock', loadSetting('showClock') !== false);
+    applySetting('showClimate', loadSetting('showClimate') !== false);
+    applySetting('showApps', loadSetting('showApps') !== false);
+    applySetting('showPlayer', loadSetting('showPlayer') !== false);
     applySetting('playerVolumeStep', loadSetting('playerVolumeStep') || 5);
     applySetting('autoRequestMusicState', loadSetting('autoRequestMusicState') !== false);
     applySetting('volumeSwipeEnabled', loadSetting('volumeSwipeEnabled') !== false);
     applySetting('appsSlotsCount', loadSetting('appsSlotsCount') || '4');
     applySetting('showAppLabels', loadSetting('showAppLabels') || false);
-    applySetting('showFooterText', loadSetting('showFooterText') !== false);
-    applySetting('footerText', loadSetting('footerText') || 'ТенеТ Т8 Вместе к новым свершениям ТенеТ Т8');
     applySetting('offModeHideClimate', loadSetting('offModeHideClimate') !== false);
     applySetting('offModeHideApps', loadSetting('offModeHideApps') !== false);
     applySetting('offModeHidePlayer', loadSetting('offModeHidePlayer') !== false);
+    applySetting('offModeHideNetwork', loadSetting('offModeHideNetwork') !== false);
+    applySetting('offModeHideMiniMap', loadSetting('offModeHideMiniMap') !== false);
     applySetting('offModeHideRightButtons', loadSetting('offModeHideRightButtons') !== false);
 
     const settingsBtn = document.getElementById('btnSettings');
@@ -1134,22 +938,19 @@ modules.settings = (function() {
       settingsBtn._clickHandler = clickHandler;
       settingsBtn.addEventListener('click', clickHandler);
       if (typeof attachOemTouchFeedback === 'function') attachOemTouchFeedback(settingsBtn);
-    } else {
-      setTimeout(() => {
-        const retryBtn = document.getElementById('btnSettings');
-        if (retryBtn) {
-          retryBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            e.preventDefault();
-            open();
-          });
-        }
-      }, 500);
     }
-
     window.addEventListener('resize', handleResize);
     window.addEventListener('orientationchange', handleResize);
   }
 
-  return { init, open, close, applyOpacityToNewElement };
+  // Экспортируем также loadSetting/saveSetting — сайдбару они понадобятся
+  return {
+    init,
+    open,
+    close,
+    applyOpacityToNewElement,
+    loadSetting,
+    saveSetting,
+    applySetting
+  };
 })();

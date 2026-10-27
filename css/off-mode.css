@@ -1,7 +1,6 @@
 /* === OFF-РЕЖИМ === */
 body.off-mode::before { opacity: 0.9; }
 
-body.off-mode #btnNetwork,
 body.off-mode #btnClose {
   opacity: 0;
   pointer-events: none;
@@ -12,7 +11,6 @@ body.off-mode .brand-footer {
   pointer-events: none;
 }
 
-/* Класс для выборочного скрытия элементов (управляется через настройки) */
 body.off-mode .off-mode-hidden {
   display: none !important;
 }
@@ -149,9 +147,12 @@ body.off-mode .flip-separator {
   box-shadow: none !important;
 }
 
+/* Строгое скрытие даты и дня недели */
 body.off-mode .widget_time__date,
-body.off-mode .widget_time__weekday {
-  display: none;
+body.off-mode .widget_time__weekday,
+body.off-mode #dateDisplay,
+body.off-mode #weekdayDisplay {
+  display: none !important;
 }
 
 body.off-mode .widget_time.glowing .flip-digit {
@@ -187,7 +188,8 @@ body.off-mode .widget_time.glowing .flip-digit {
   }
 }
 
-body:not(.off-mode) .widget_time {
+/* [FIX] Анимация возврата часов применяется ТОЛЬКО во время возврата из off-mode. */
+body.returning-from-off .widget_time {
   position: fixed;
   top: 35%;
   left: 50%;
@@ -221,7 +223,8 @@ body:not(.off-mode) .widget_time {
   }
 }
 
-body:not(.off-mode) .widget_time {
+/* Финальное состояние часов после возврата из off-mode */
+body:not(.off-mode) .widget_time.animation-done {
   position: relative !important;
   top: auto !important;
   left: auto !important;
@@ -238,7 +241,7 @@ body:not(.off-mode) .widget_time {
   border: 1px solid var(--oem-border-soft);
 }
 
-body:not(.off-mode) .widget_time__signature {
+body:not(.off-mode) .widget_time.animation-done .widget_time__signature {
   display: block;
 }
 
@@ -266,4 +269,11 @@ body:not(.off-mode) .dashboard {
   opacity: 1;
   pointer-events: auto;
   visibility: visible;
+}
+
+/* Жесткий показ иконки сети в OFF-mode (если она не скрыта настройками) */
+body.off-mode #btnNetwork {
+  opacity: 1 !important;
+  visibility: visible !important;
+  z-index: 999 !important;
 }

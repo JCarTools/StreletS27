@@ -1,7 +1,6 @@
 /**********************************************
  * Модуль: Управление громкостью
- *  - handleVolumeFromSystem понимает объект {volume, value}
- *  - showToast контролируется вызывающим (default = false для внешних)
+ * handleVolumeFromSystem понимает объект {volume, value}.
  **********************************************/
 
 modules.volume = (function() {
@@ -10,7 +9,6 @@ modules.volume = (function() {
   let volumeCheckInterval = null;
   let isInitialized = false;
 
-  // Echo-suppression
   let lastSetValue = null;
   let lastSetTime = 0;
   const ECHO_SUPPRESS_MS = 4000;
@@ -33,7 +31,6 @@ modules.volume = (function() {
       const newVolume = parseVolumeValue(raw);
       if (newVolume === null) return currentVolume;
       if (isSuppressing() && newVolume !== lastSetValue) {
-        warn('[Volume] poll', newVolume, '!= last set', lastSetValue, '— ignored');
         return currentVolume;
       }
       if (newVolume !== currentVolume) {
@@ -47,10 +44,6 @@ modules.volume = (function() {
     return currentVolume;
   }
 
-  /**
-   * @param {number} volume
-   * @param {boolean} showToastMsg — по умолчанию false, чтобы не спамить
-   */
   function setVolume(volume, showToastMsg = false) {
     const newVolume = parseVolumeValue(volume);
     if (newVolume === null) return;
@@ -93,7 +86,6 @@ modules.volume = (function() {
   function startAutoCheck(intervalMs = 30000) {
     stopAutoCheck();
     volumeCheckInterval = setInterval(fetchVolume, intervalMs);
-    log('[Volume] Автоопрос включён, интервал', intervalMs, 'мс');
   }
 
   function stopAutoCheck() {
@@ -118,7 +110,6 @@ modules.volume = (function() {
     isInitialized = true;
     fetchVolume();
     startAutoCheck(30000);
-    log('[Volume] Модуль инициализирован, громкость:', currentVolume);
   }
 
   return {

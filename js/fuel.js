@@ -1,15 +1,12 @@
 /**********************************************
  * Модуль: Топливо и АКБ
- * [FIX] Точный парсинг под формат моста:
- *       vehicle.fuelPercent (33.3)
- *       vehicle.batteryVoltage (12.9)
- *       fuel.value (33.3) / fuel.raw (333 / 10)
- *       battery.value (13) / battery.raw (13)
+ * [FIX] Точный парсинг под формат моста.
  **********************************************/
 
 modules.fuel = (function() {
   let fuelPercent = null;
   let batteryVoltage = null;
+  let pollInterval = null;
   
   const elFuelValue = document.getElementById('fuelValue');
   const elFuelUnit = document.getElementById('fuelUnit');
@@ -49,7 +46,6 @@ modules.fuel = (function() {
     if (!data) return;
     let changed = false;
 
-    // 1. Топливо
     let f = null;
     if (data.vehicle && data.vehicle.fuelPercent !== undefined) {
       f = Number(data.vehicle.fuelPercent);
@@ -58,7 +54,6 @@ modules.fuel = (function() {
     } else if (data.fuelPercent !== undefined) {
       f = Number(data.fuelPercent);
     } else if (data.fuel && data.fuel.raw !== undefined) {
-      // Если пришел только raw (333), переводим в проценты
       f = Number(data.fuel.raw) / 10;
     }
     
@@ -70,7 +65,6 @@ modules.fuel = (function() {
       }
     }
 
-    // 2. АКБ
     let b = null;
     if (data.vehicle && data.vehicle.batteryVoltage !== undefined) {
       b = Number(data.vehicle.batteryVoltage);
@@ -94,9 +88,9 @@ modules.fuel = (function() {
     render();
     if (modules.carData) modules.carData.subscribe(applyCarData);
     
-    // Дополнительный прямой запрос (раз в 10 сек), чтобы не зависеть только от "all"
-    setInterval(async () => {
-      if (!window.android || !android.requestCarDataAsync) return;
+    if (pollInterval) clearInterval(pollInterval);
+    pollInterval = setInterval(async () => {
+      if (!IS_ANDROID || typeof android.requestCarDataAsync !== 'function') return;
       
       const fRes = await android.requestCarDataAsync('fuel', 2000);
       if (fRes) applyCarData({ fuel: fRes });
@@ -110,5 +104,12 @@ modules.fuel = (function() {
     });
   }
 
-  return { init, refreshDisplay: render, destroy: () => {} };
+  function destroy() {
+    if (pollInterval) {
+      clearInterval(pollInterval);
+      pollInterval = null;
+    }
+  }
+
+  return { init, refreshDisplay: render, destroy, updateFromEvent: applyCarData };
 })();

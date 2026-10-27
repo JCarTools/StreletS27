@@ -1,8 +1,6 @@
 /**********************************************
  * Модуль: Управление громкостью через свайп
- * [UX] Добавлен индикатор громкости при свайпе
- * [UX] Подсказка уточнена — «регулировка громкости»
- * [FIX] Убран вызов несуществующего showVolumeIndicator
+ * [FIX] Баг #13: enabled синхронизирован с storage.
  **********************************************/
 
 modules.volumeSwipe = (function() {
@@ -32,17 +30,22 @@ modules.volumeSwipe = (function() {
 
   function isEnabled() {
     const settingEnabled = storage.load('setting_volumeSwipeEnabled');
-    return settingEnabled !== false;
+    return settingEnabled !== false && enabled !== false;
+  }
+
+  function isOffMode() {
+    return document.body.classList.contains('off-mode');
   }
 
   function shouldExclude(target) {
+    if (isOffMode()) return true;
+    if (!target || typeof target.closest !== 'function') return false;
     for (const selector of EXCLUDE_SELECTORS) {
       if (target.closest(selector)) return true;
     }
     return false;
   }
 
-  // [UX] Индикатор громкости
   function getIndicator() {
     if (indicatorEl && document.body.contains(indicatorEl)) return indicatorEl;
     indicatorEl = document.getElementById('volume-indicator');
@@ -133,6 +136,12 @@ modules.volumeSwipe = (function() {
 
   function handleTouchMove(e) {
     if (!isEnabled() || !isSwiping) return;
+    if (isOffMode()) {
+      isSwiping = false;
+      hasMoved = false;
+      touchIdentifier = null;
+      return;
+    }
     if (e.touches) {
       const currentIdentifier = getTouchIdentifier(e);
       if (currentIdentifier !== touchIdentifier) return;
@@ -187,6 +196,13 @@ modules.volumeSwipe = (function() {
 
   function handleMouseMove(e) {
     if (!isEnabled() || !isSwiping || touchIdentifier !== 'mouse') return;
+    if (isOffMode()) {
+      isSwiping = false;
+      hasMoved = false;
+      touchIdentifier = null;
+      mouseDownPos = null;
+      return;
+    }
     const deltaX = Math.abs(e.clientX - mouseDownPos.x);
     const deltaY = Math.abs(e.clientY - mouseDownPos.y);
     if (!hasMoved && deltaX > MIN_MOVE_DISTANCE && deltaX > deltaY) {
@@ -230,7 +246,6 @@ modules.volumeSwipe = (function() {
 
   function setEnabled(value) {
     enabled = value !== false;
-    log('[VolumeSwipe] Свайп регулировки громкости:', enabled ? 'включён' : 'выключен');
     if (!enabled) {
       isSwiping = false;
       hasMoved = false;
@@ -247,7 +262,6 @@ modules.volumeSwipe = (function() {
 
     const settingEnabled = storage.load('setting_volumeSwipeEnabled');
     enabled = settingEnabled !== false;
-    log('[VolumeSwipe] Инициализация. Свайп:', enabled ? 'включён' : 'выключен');
 
     document.addEventListener('touchstart', handleTouchStart, { passive: false });
     document.addEventListener('touchmove', handleTouchMove, { passive: false });
@@ -278,8 +292,6 @@ modules.volumeSwipe = (function() {
         }
       }
     });
-
-    log('[VolumeSwipe] Инициализация завершена');
   }
 
   return { init, setEnabled };

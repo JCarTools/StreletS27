@@ -1,17 +1,19 @@
 /**********************************************
  * Модуль: Климат (2x3)
- * [FIX] Добавлен reinitSlots: перепривязка кликов на новые слоты.
+ * [FIX] Все иконки принудительно белые (включая багажник и рециркуляцию).
+ * [FIX] Цвет trunk-иконки всегда белый.
  **********************************************/
 
 modules.climate = (function() {
   let climateCommands = [], climateState = {};
   let currentPickerSlot = null;
   
-  let trunkOpen = false;
+  let trunkOpen = !!storage.load('climateTrunkOpen');
 
   let optimisticLevels = Object.create(null);
   let optimisticActions = Object.create(null);
   const OPTIMISTIC_MS = 3000;
+  let optimisticSweepTimer = null;
 
   const ACTION_STATE_COMMANDS = {
     heat_wheel_on: { key: "rulHeat", value: true },
@@ -26,7 +28,6 @@ modules.climate = (function() {
 
   function loadCommands() {
     climateCommands = [
-      // === ПОДОГРЕВЫ ===
       { cmd: "heat_seat_l", label: climateLabelFor("heat_seat_l"), max: 3, icon: "icons/Seat heated_left.svg", off: "heat_seat_l_0" },
       { cmd: "heat_seat_r", label: climateLabelFor("heat_seat_r"), max: 3, icon: "icons/Seat heated_right.svg", off: "heat_seat_r_0" },
       { cmd: "heat_zad_seat_l", label: climateLabelFor("heat_zad_seat_l"), max: 3, icon: "icons/Seat heated_left.svg", off: "heat_zad_seat_l_0" },
@@ -34,14 +35,10 @@ modules.climate = (function() {
       { cmd: "heat_wheel_on", label: climateLabelFor("heat_wheel_on"), max: 1, icon: "icons/Steering wheel heat.svg", off: "heat_wheel_off" },
       { cmd: "heat_windshield_on", label: climateLabelFor("heat_windshield_on"), max: 1, icon: "icons/Windshield defroster.svg", off: "heat_windshield_off" },
       { cmd: "heat_rearwindow_on", label: climateLabelFor("heat_rearwindow_on"), max: 1, icon: "icons/Rare windshield defroster.svg", off: "heat_rearwindow_off" },
-      
-      // === ВЕНТИЛЯЦИЯ ===
       { cmd: "vent_seat_l", label: climateLabelFor("vent_seat_l"), max: 3, icon: "icons/Seat vent_left.svg", off: "vent_seat_l_0" },
       { cmd: "vent_seat_r", label: climateLabelFor("vent_seat_r"), max: 3, icon: "icons/Seat vent_right.svg", off: "vent_seat_r_0" },
       { cmd: "vent_zad_seat_l", label: climateLabelFor("vent_zad_seat_l"), max: 3, icon: "icons/Seat vent_left.svg", off: "vent_zad_seat_l_0" },
       { cmd: "vent_zad_seat_r", label: climateLabelFor("vent_zad_seat_r"), max: 3, icon: "icons/Seat vent_right.svg", off: "vent_zad_seat_r_off" },
-      
-      // === ОСТАЛЬНОЕ ===
       { cmd: "Recirculation_On", label: climateLabelFor("Recirculation_On"), max: 1, icon: "icons/Recirculation.svg", off: "Recirculation_Off" },
       { cmd: "trunk", label: "Багажник", max: 1, icon: "TRUNK_SVG", off: "trunk" },
       { cmd: "voditel_seat_1", label: climateLabelFor("voditel_seat_1"), max: 1, icon: "icons/Driver.svg" },
@@ -54,8 +51,9 @@ modules.climate = (function() {
     return cmd.off || `${cmd.cmd}_0`;
   }
 
-  function getTrunkSvg(color = '#fff') {
-    return `<svg viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width: 100%; height: 100%; display: block;">
+  function getTrunkSvg() {
+    // Всегда белый цвет
+    return `<svg viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width: 100%; height: 100%; display: block;">
       <path d="M3 17h18" />
       <path d="M7 17l-1.5-4.5A2 2 0 0 1 7.4 10h4.2" />
       <path d="M13 10h4.6a2 2 0 0 1 1.9 1.3L21 17" />
@@ -87,21 +85,14 @@ modules.climate = (function() {
     
     let iconHtml = '';
     if (saved === 'trunk') {
-      iconHtml = `<div class="climate-svg-icon" style="width: 2.2rem; height: 2.2rem; margin-bottom: 0.3rem;">${getTrunkSvg('#fff')}</div>`;
+      iconHtml = `<div class="climate-svg-icon" style="width: 2.2rem; height: 2.2rem; margin-bottom: 0.3rem;">${getTrunkSvg()}</div>`;
     } else {
-      iconHtml = `<img src="${c.icon}">`;
+      // Принудительно делаем иконку белой через CSS-фильтр
+      iconHtml = `<img src="${c.icon}" style="filter: brightness(0) invert(1) !important;">`;
     }
 
     s.innerHTML = `${iconHtml}<div class="climate-label">${c.label.replace(/\\n/g,'<br>')}</div><div class="climate-dots">${dots}</div>`;
     s.classList.toggle('active', lvl > 0);
-    
-    if (saved !== 'trunk') {
-      const img = s.querySelector('img');
-      if (img) {
-        img.style.filter = 'brightness(0) invert(1)';
-        img.style.opacity = '0.92';
-      }
-    }
   }
 
   function updateAll() {
@@ -112,8 +103,9 @@ modules.climate = (function() {
     const level = Number(value);
     if (!Number.isFinite(level)) return null;
     const rounded = Math.round(level);
+    if (rounded === 0) return 0;
     if (rounded >= 1 && rounded <= 4) return rounded - 1;
-    return rounded === 0 ? 0 : null;
+    return null;
   }
 
   function normalizeBoolean(value) {
@@ -145,9 +137,35 @@ modules.climate = (function() {
     return null;
   }
 
+  function sweepOptimistic() {
+    const now = Date.now();
+    Object.keys(optimisticLevels).forEach(k => {
+      if (!optimisticLevels[k] || now >= optimisticLevels[k].until) delete optimisticLevels[k];
+    });
+    Object.keys(optimisticActions).forEach(k => {
+      if (!optimisticActions[k] || now >= optimisticActions[k].until) delete optimisticActions[k];
+    });
+  }
+
+  function startOptimisticSweep() {
+    if (optimisticSweepTimer) return;
+    optimisticSweepTimer = setInterval(sweepOptimistic, 1500);
+  }
+
+  function stopOptimisticSweep() {
+    if (optimisticSweepTimer) { clearInterval(optimisticSweepTimer); optimisticSweepTimer = null; }
+  }
+
   function applyCarData(raw) {
     if (!raw) return;
-    const payload = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    let payload;
+    try {
+      payload = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    } catch (e) {
+      return;
+    }
+    if (!payload || typeof payload !== 'object') return;
+    
     const seats = payload.seats || payload;
     const front = seats.front || seats.frontSeats || {};
     const rear = seats.rear || seats.rearSeats || {};
@@ -176,7 +194,7 @@ modules.climate = (function() {
       const optimistic = optimisticLevels[cmd];
       if (optimistic && now < optimistic.until) {
         if (level !== optimistic.level) return;
-        if (level === optimistic.level) delete optimisticLevels[cmd];
+        delete optimisticLevels[cmd];
       }
       if (climateState[cmd] !== level) {
         climateState[cmd] = level;
@@ -193,7 +211,7 @@ modules.climate = (function() {
       const optimistic = optimisticActions[mapping.key];
       if (optimistic && now < optimistic.until) {
         if (value !== optimistic.value) return;
-        if (value === optimistic.value) delete optimisticActions[mapping.key];
+        delete optimisticActions[mapping.key];
       }
       const targetLevel = value ? 1 : 0;
       if (climateState[cmd] !== targetLevel) {
@@ -208,7 +226,7 @@ modules.climate = (function() {
       let skip = false;
       if (optimistic && now < optimistic.until) {
         if (recircVal !== optimistic.value) skip = true;
-        if (recircVal === optimistic.value) delete optimisticActions['recirculation'];
+        else delete optimisticActions['recirculation'];
       }
       if (!skip) {
         const targetLevel = recircVal ? 1 : 0;
@@ -233,25 +251,35 @@ modules.climate = (function() {
       const cmdToSend = trunkOpen ? 'close_trunk' : 'open_trunk';
       if (window.androidApi && typeof window.androidApi.requestCarCommandAsync === 'function') {
         const reqId = 'trunk_' + Date.now();
-        window.androidApi.requestCarCommandAsync(TOKEN, reqId, JSON.stringify({ cmd: cmdToSend }));
+        window.androidApi.requestCarCommandAsync(getToken(), reqId, JSON.stringify({ cmd: cmdToSend }));
       } else if (typeof android.runEnum === 'function') {
         android.runEnum(cmdToSend);
       }
       
       trunkOpen = !trunkOpen;
+      storage.save('climateTrunkOpen', trunkOpen);
       renderSlot(slotElement);
-      showToast(trunkOpen ? 'Багажник открыт' : 'Багажник закрыт');
+      if (typeof showToast === 'function') showToast(trunkOpen ? 'Багажник открыт' : 'Багажник закрыт');
       return;
     }
 
     if (saved.startsWith('voditel_seat_')) {
       android.runEnum(saved);
-      showToast(c.label.replace(/\\n/g, ' '));
+      if (typeof showToast === 'function') showToast(c.label.replace(/\\n/g, ' '));
       return;
     }
 
     const curLvl = climateState[saved] || 0;
-    const next = (curLvl + 1) % ((c.max || 1) + 1);
+    const maxLvl = c.max || 1;
+    
+    let next;
+    if (curLvl === 0) {
+      next = maxLvl;
+    } else if (curLvl === 1) {
+      next = 0;
+    } else {
+      next = curLvl - 1;
+    }
     
     climateState[saved] = next;
     
@@ -273,13 +301,11 @@ modules.climate = (function() {
     android.runEnum(cmdToSend);
   }
 
-  // --- Инициализация слотов и перепривязка кликов ---
   function initSlots() {
     document.querySelectorAll('.climate_slot').forEach(slot => {
       if (slot._clickHandler) slot.removeEventListener('click', slot._clickHandler);
       slot._clickHandler = (e) => { e.stopPropagation(); e.preventDefault(); onSlotClick(slot); };
       slot.addEventListener('click', slot._clickHandler);
-      // Перепривязываем longPress на случай если элемент новый
       makeLongPressable(slot, () => openPicker(slot), { delay: 700 });
     });
   }
@@ -296,9 +322,9 @@ modules.climate = (function() {
       
       let iconHtml = '';
       if (cmd.cmd === 'trunk') {
-         iconHtml = `<div style="width: 2.2rem; height: 2.2rem; margin: 0 auto 0.5rem;">${getTrunkSvg('#fff')}</div>`;
+         iconHtml = `<div style="width: 2.2rem; height: 2.2rem; margin: 0 auto 0.5rem;">${getTrunkSvg()}</div>`;
       } else {
-         iconHtml = `<img src="${cmd.icon}">`;
+         iconHtml = `<img src="${cmd.icon}" style="filter: brightness(0) invert(1) !important;">`;
       }
       
       d.innerHTML = `${iconHtml}<span>${cmd.label.replace(/\\n/g,' ')}</span>`;
@@ -313,7 +339,6 @@ modules.climate = (function() {
     picker.classList.add('open');
   }
 
-  // Экспортируем reinitSlots, чтобы settings.js мог вызвать его после смены количества слотов
   function reinitSlots() {
     setTimeout(() => {
       initSlots();
@@ -325,6 +350,7 @@ modules.climate = (function() {
     loadCommands();
     initSlots();
     updateAll();
+    startOptimisticSweep();
     
     if (modules.carData) modules.carData.subscribe(applyCarData);
     
@@ -347,9 +373,13 @@ modules.climate = (function() {
           anyOff = true;
         }
       });
-      if (anyOff) showToast('Все функции выключены');
+      if (anyOff && typeof showToast === 'function') showToast('Все функции выключены');
     });
   }
 
-  return { init, updateState: applyCarData, destroy: () => {}, reinitSlots };
+  function destroy() {
+    stopOptimisticSweep();
+  }
+
+  return { init, updateState: applyCarData, destroy, reinitSlots };
 })();

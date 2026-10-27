@@ -1,8 +1,9 @@
 /* === КАСТОМНЫЕ ОБОИ В САЙДБАРЕ === */
 .custom-wallpaper-section {
-  margin-top: 20px;
-  padding-top: 15px;
-  border-top: 1px solid rgba(255,255,255,0.2);
+  margin-top: 0;
+  margin-bottom: 15px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid rgba(255,255,255,0.2);
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -47,17 +48,15 @@ video::-webkit-media-controls-overlay-play-button {
   visibility: hidden !important;
 }
 
-/* Дополнительно скрываем плей-оверлей через псевдоэлементы */
 video::before,
 video::after {
   display: none !important;
 }
 
-/* Плавное появление видео (opacity управляется из JS) */
 #video-background {
   transition: opacity 0.6s ease;
 }
-/* Скрытие виджетов при клике (только в видео-режиме) */
+
 body.widgets-hidden .dashboard {
   opacity: 0;
   pointer-events: none;
@@ -72,7 +71,6 @@ body.widgets-hidden .brand-footer {
   transition: opacity 0.3s ease;
 }
 
-/* Обратный переход */
 body:not(.widgets-hidden) .dashboard,
 body:not(.widgets-hidden) #btnNetwork,
 body:not(.widgets-hidden) #btnClose,
@@ -80,4 +78,332 @@ body:not(.widgets-hidden) .brand-footer {
   opacity: 1;
   pointer-events: auto;
   transition: opacity 0.3s ease;
+}
+
+/* ============================================
+   МЕНЕДЖЕР ОБОЕВ (wallpaperManager)
+   ============================================ */
+
+.wm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
+  z-index: 15000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  animation: wmFadeIn 0.25s ease forwards;
+}
+@keyframes wmFadeIn {
+  to { opacity: 1; }
+}
+
+.wm-content {
+  width: min(92vw, 900px);
+  max-height: 90vh;
+  background: var(--bg-widget, rgba(29, 27, 32, 0.92));
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--oem-border-soft, rgba(255, 255, 255, 0.08));
+  border-radius: 1.5rem;
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transform: scale(0.96);
+  animation: wmSlideIn 0.3s ease-out forwards;
+}
+@keyframes wmSlideIn {
+  to { transform: scale(1); }
+}
+body.light .wm-content {
+  background: rgba(235, 238, 245, 0.94);
+  border-color: rgba(83, 94, 125, 0.12);
+}
+
+.wm-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
+}
+body.light .wm-header { border-bottom-color: rgba(0, 0, 0, 0.06); }
+
+.wm-header h3 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.92);
+  margin: 0;
+}
+body.light .wm-header h3 { color: rgba(28, 35, 48, 0.92); }
+
+.wm-close {
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 0.9rem;
+  background: linear-gradient(180deg, rgba(40, 46, 58, 0.6), rgba(19, 22, 30, 0.36));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(238, 242, 247, 0.86);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+}
+.wm-close:hover { background: linear-gradient(180deg, rgba(50, 58, 73, 0.76), rgba(24, 29, 38, 0.58)); }
+body.light .wm-close {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(232, 237, 245, 0.58));
+  border-color: rgba(86, 97, 124, 0.11);
+  color: rgba(44, 53, 73, 0.82);
+}
+
+.wm-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1.25rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+body.light .wm-toolbar { border-bottom-color: rgba(0, 0, 0, 0.05); }
+
+/* Контейнер для кнопок */
+.wm-toolbar-buttons {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.wm-counter {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.6);
+  font-family: monospace;
+  margin-left: auto;
+}
+body.light .wm-counter { color: rgba(50, 60, 80, 0.7); }
+
+.wm-btn {
+  padding: 0.5rem 1rem;
+  border-radius: 0.9rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: rgba(238, 242, 247, 0.92);
+  background: linear-gradient(180deg, rgba(46, 52, 66, 0.92), rgba(24, 28, 36, 0.78));
+  white-space: nowrap;
+}
+.wm-btn:hover { background: linear-gradient(180deg, rgba(56, 62, 76, 0.92), rgba(30, 34, 42, 0.85)); }
+.wm-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.wm-btn-add { color: rgba(180, 220, 255, 0.95); border-color: rgba(100, 150, 255, 0.3); }
+.wm-btn-cancel { color: rgba(238, 242, 247, 0.75); }
+body.light .wm-btn {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(232, 237, 245, 0.58));
+  border-color: rgba(88, 102, 134, 0.12);
+  color: rgba(45, 56, 78, 0.85);
+}
+body.light .wm-btn-add { color: rgba(50, 90, 160, 0.95); border-color: rgba(80, 130, 220, 0.3); }
+
+.wm-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.75rem 1.25rem 1.25rem;
+  scrollbar-width: thin;
+}
+.wm-body::-webkit-scrollbar { width: 4px; }
+.wm-body::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); border-radius: 10px; }
+
+.wm-section-title {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: rgba(255, 255, 255, 0.5);
+  margin: 1rem 0 0.5rem;
+  font-weight: 600;
+}
+body.light .wm-section-title { color: rgba(50, 60, 80, 0.6); }
+
+.wm-empty {
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.4);
+  padding: 0.5rem 0;
+  font-style: italic;
+}
+body.light .wm-empty { color: rgba(50, 60, 80, 0.5); }
+
+.wm-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.7rem;
+}
+
+.wm-item {
+  position: relative;
+  background: linear-gradient(180deg, rgba(42, 47, 59, 0.44), rgba(23, 27, 35, 0.3));
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 0.85rem;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+body.light .wm-item {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(234, 239, 246, 0.5));
+  border-color: rgba(86, 97, 124, 0.09);
+}
+
+.wm-thumb {
+  aspect-ratio: 16 / 10;
+  background: rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+}
+.wm-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.wm-name {
+  font-size: 0.68rem;
+  color: rgba(238, 242, 247, 0.8);
+  padding: 0.35rem 0.5rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+body.light .wm-name { color: rgba(45, 56, 78, 0.85); }
+
+.wm-del {
+  margin: 0 0.35rem 0.4rem;
+  padding: 0.3rem 0.5rem;
+  font-size: 0.66rem;
+  border-radius: 0.55rem;
+  border: 1px solid rgba(255, 100, 100, 0.25);
+  background: rgba(255, 80, 80, 0.08);
+  color: rgba(255, 150, 150, 0.9);
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+.wm-del:hover { background: rgba(255, 80, 80, 0.18); }
+.wm-restore { border-color: rgba(120, 200, 140, 0.3); background: rgba(80, 200, 100, 0.08); color: rgba(150, 240, 170, 0.9); }
+.wm-restore:hover { background: rgba(80, 200, 100, 0.18); }
+body.light .wm-del { border-color: rgba(200, 80, 80, 0.3); color: rgba(180, 60, 60, 0.9); background: rgba(255, 200, 200, 0.2); }
+body.light .wm-restore { border-color: rgba(80, 160, 100, 0.3); color: rgba(60, 130, 70, 0.9); background: rgba(200, 240, 200, 0.25); }
+
+.wm-item-hidden .wm-thumb { opacity: 0.45; filter: grayscale(0.7); }
+
+/* === Picker из Downloads === */
+.wm-picker-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(8px);
+  z-index: 16000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  animation: wmFadeIn 0.2s ease forwards;
+}
+.wm-picker-content {
+  width: min(92vw, 700px);
+  max-height: 85vh;
+  background: var(--bg-widget, rgba(29, 27, 32, 0.95));
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 1.25rem;
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+body.light .wm-picker-content { background: rgba(240, 243, 250, 0.96); border-color: rgba(0, 0, 0, 0.08); }
+
+.wm-picker-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.9);
+}
+body.light .wm-picker-header { color: rgba(30, 40, 55, 0.9); border-bottom-color: rgba(0, 0, 0, 0.06); }
+
+.wm-picker-close {
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: 0.7rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.8);
+  cursor: pointer;
+}
+body.light .wm-picker-close { border-color: rgba(0, 0, 0, 0.1); background: rgba(0, 0, 0, 0.05); color: rgba(30, 40, 55, 0.8); }
+
+.wm-picker-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.5rem 0.75rem;
+}
+.wm-picker-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.wm-picker-item {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.55rem 0.7rem;
+  border-radius: 0.65rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+body.light .wm-picker-item { background: rgba(0, 0, 0, 0.03); border-color: rgba(0, 0, 0, 0.05); }
+
+.wm-picker-cb {
+  width: 1.1rem;
+  height: 1.1rem;
+  accent-color: #4a80d0;
+  cursor: pointer;
+}
+.wm-picker-name {
+  font-size: 0.78rem;
+  color: rgba(238, 242, 247, 0.85);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+body.light .wm-picker-name { color: rgba(45, 56, 78, 0.85); }
+.wm-picker-size {
+  font-size: 0.68rem;
+  font-family: monospace;
+  color: rgba(180, 200, 220, 0.7);
+  white-space: nowrap;
+}
+.wm-picker-size.wm-over { color: rgba(255, 140, 140, 0.9); }
+
+.wm-picker-footer {
+  display: flex;
+  gap: 0.6rem;
+  justify-content: flex-end;
+  padding: 0.75rem 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+body.light .wm-picker-footer { border-top-color: rgba(0, 0, 0, 0.06); }
+
+@media (max-width: 600px) {
+  .wm-content { width: 96vw; max-height: 92vh; }
+  .wm-grid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 0.5rem; }
+  .wm-toolbar { flex-direction: column; align-items: stretch; }
+  .wm-btn-add { width: 100%; }
 }

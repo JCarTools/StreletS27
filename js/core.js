@@ -1,13 +1,16 @@
 /**********************************************
  * Ядро: токен, хранилище, API, утилиты
- * [FIX] Добавлен запрос каталога приложений (launcherCatalog).
+ * [FIX] Запрет выделения текста при долгом нажатии.
  **********************************************/
 
 if (typeof window.MANIFEST === 'undefined' || !window.MANIFEST) {
   window.MANIFEST = { version: '—' };
 }
 
-const TOKEN = window.ANDROID_TOKEN || "SECURE_TOKEN_2025";
+function getToken() {
+  return window.ANDROID_TOKEN || "SECURE_TOKEN_2025";
+}
+
 const IS_ANDROID = !!(window.androidApi && typeof window.androidApi === "object");
 
 const storage = {
@@ -45,13 +48,12 @@ function waitForResponse(requestId, timeoutMs = 3000) {
 function callAndroid(method, ...args) {
   if (!IS_ANDROID || typeof window.androidApi[method] !== "function") return null;
   try {
-    return window.androidApi[method].call(window.androidApi, TOKEN, ...args);
+    return window.androidApi[method].call(window.androidApi, getToken(), ...args);
   } catch (e) {
     return null;
   }
 }
 
-// --- Очередь команд (из app.js) ---
 const commandQueue = [];
 let commandInFlight = null;
 
@@ -81,7 +83,6 @@ function finishEnumCommand(requestId) {
   commandInFlight = null;
   setTimeout(dispatchNextEnumCommand, 70);
 }
-// -----------------------------------
 
 const android = {
   call: callAndroid,
@@ -102,25 +103,37 @@ const android = {
     return resp;
   },
 
-  // [NEW] Запрос каталога приложений
-  async getLauncherCatalogAsync(timeoutMs = 3000) {
-    const id = nextReqId('catalog');
-    const ok = callAndroid('requestLauncherCatalogAsync', id);
-    if (ok !== true) return null;
-    const resp = await waitForResponse(id, timeoutMs);
-    if (!resp) return null;
-    if (typeof resp === 'string') {
-      try { return JSON.parse(resp); } catch { return resp; }
-    }
-    return resp;
-  },
-
   getUserApps() {
     return callAndroid('getUserApps');
   },
 
-  runApp(pkg) {
-    callAndroid('runApp', pkg);
+  runApp(packageName) {
+    return callAndroid('runApp', packageName);
+  },
+
+  getWeather() {
+    const raw = callAndroid('getWeather');
+    if (!raw) return null;
+    try { return typeof raw === 'string' ? JSON.parse(raw) : raw; } catch { return null; }
+  },
+
+  refreshWeather(lat, lon) {
+    return callAndroid('refreshWeather', lat, lon);
+  },
+
+  getFileList() {
+    const raw = callAndroid('getFileList');
+    if (!raw) return [];
+    try {
+      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+      return [];
+    }
+  },
+
+  getFile(name) {
+    return callAndroid('getFile', name);
   },
 
   getVolume() {
@@ -140,7 +153,10 @@ const android = {
 };
 
 function handleCarResponse(raw) {
-  let evt = typeof raw === 'string' ? JSON.parse(raw) : raw;
+  let evt = raw;
+  if (typeof raw === 'string') {
+    try { evt = JSON.parse(raw); } catch { return; }
+  }
   if (!evt || !evt.requestId) return;
   
   if (commandInFlight && evt.requestId === commandInFlight.requestId) {
@@ -163,6 +179,21 @@ window.onAndroidEvent = function(type, data) {
   }
 };
 
+(function injectToastKeyframes() {
+  if (document.getElementById('toast-keyframes-style')) return;
+  const style = document.createElement('style');
+  style.id = 'toast-keyframes-style';
+  style.textContent = `
+    @keyframes fadeInOutTop {
+      0% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+      15% { opacity: 1; transform: translateX(-50%) translateY(0); }
+      85% { opacity: 1; transform: translateX(-50%) translateY(0); }
+      100% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+    }
+  `;
+  (document.head || document.documentElement).appendChild(style);
+})();
+
 function showToast(message, duration = 3000) {
   const existing = document.querySelector('.toast-message');
   if (existing) existing.remove();
@@ -174,15 +205,37 @@ function showToast(message, duration = 3000) {
   setTimeout(() => toast.remove(), duration);
 }
 
+// Запрет выделения и контекстного меню на долгое нажатие
+document.addEventListener('contextmenu', (e) => {
+  // Разрешаем контекстное меню только для полей ввода
+  if (e.target.closest('input, textarea')) return;
+  e.preventDefault();
+});
+
+document.addEventListener('selectstart', (e) => {
+  if (e.target.closest('input, textarea')) return;
+  if (e.target.closest('.dashboard, .widget, .widget_buttons, .app_slot, .climate_slot, .widget_player__btn, #btnNetwork, #btnClose, #btnSettings, #btnWallpaper, #openSidebar')) {
+    e.preventDefault();
+  }
+});
+
 function makeLongPressable(element, callback, options = {}) {
   const { delay = 700, preventDefaultOnStart = false } = options;
   if (element._lpHandlers && element._lpHandlers.teardown) element._lpHandlers.teardown();
   let pressTimer = null;
   let longPressTriggered = false;
+  
   const start = (e) => {
     longPressTriggered = false;
     clearTimeout(pressTimer);
     if (preventDefaultOnStart && e.cancelable) e.preventDefault();
+    
+    // Принудительно снимаем выделение
+    if (window.getSelection) {
+      const sel = window.getSelection();
+      if (sel) sel.removeAllRanges();
+    }
+    
     pressTimer = setTimeout(() => {
       longPressTriggered = true;
       callback(element, e);
@@ -216,7 +269,9 @@ function makeLongPressable(element, callback, options = {}) {
 
 function attachOemTouchFeedback(selector) {
   const elements = typeof selector === 'string' ? document.querySelectorAll(selector) : selector;
-  elements?.forEach?.((element) => {
+  if (!elements) return;
+  const list = (elements instanceof Element) ? [elements] : Array.from(elements);
+  list.forEach((element) => {
     if (!element || element.dataset.oemTouchBound === '1') return;
     element.dataset.oemTouchBound = '1';
     let releaseTimer = null;
@@ -233,8 +288,8 @@ function attachOemTouchFeedback(selector) {
       const point = event?.touches?.[0] || event;
       ripple.style.left = `${(point?.clientX ?? (rect.left + rect.width / 2)) - rect.left}px`;
       ripple.style.top = `${(point?.clientY ?? (rect.top + rect.height / 2)) - rect.top}px`;
-      ripple.style.animation = 'none';
-      void ripple.offsetHeight;
+      ripple.style.animation = '';
+      void ripple.offsetWidth;
     };
     const press = (event) => {
       pointerActive = true;
@@ -242,6 +297,12 @@ function attachOemTouchFeedback(selector) {
       element.classList.remove('is-releasing');
       ensureRipple(event);
       element.classList.add('is-pressed');
+      
+      // Снимаем выделение при касании
+      if (window.getSelection) {
+        const sel = window.getSelection();
+        if (sel) sel.removeAllRanges();
+      }
     };
     const release = () => {
       if (!pointerActive && !element.classList.contains('is-pressed')) return;

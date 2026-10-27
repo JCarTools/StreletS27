@@ -1,7 +1,7 @@
 /**********************************************
  * Модуль: Данные автомобиля
  * [FIX] Используем requestCarDataAsync(key) вместо getCarData.
- *       Ключ "all" возвращает объект со всеми данными (климат, топливо, АКБ).
+ * [FIX] Безопасный JSON.parse для updateFromEvent.
  **********************************************/
 
 modules.carData = (function() {
@@ -14,14 +14,17 @@ modules.carData = (function() {
     if (isPolling) return;
     isPolling = true;
     
-    // Пробуем ключ "all" (как в эталоне app.js)
-    const data = await android.requestCarDataAsync('all', 3000);
-    
-    if (data) {
-      lastData = data;
-      notifyCallbacks(data);
+    try {
+      const data = await android.requestCarDataAsync('all', 3000);
+      if (data) {
+        lastData = data;
+        notifyCallbacks(data);
+      }
+    } catch (e) {
+      // noop
+    } finally {
+      isPolling = false;
     }
-    isPolling = false;
   }
 
   function notifyCallbacks(data) {
@@ -45,10 +48,12 @@ modules.carData = (function() {
     if (updateInterval) { clearInterval(updateInterval); updateInterval = null; }
   }
 
-  // Для событий от моста (например, если авто само шлёт обновление)
   function updateFromEvent(data) {
     if (!data) return;
-    let parsed = typeof data === 'string' ? JSON.parse(data) : data;
+    let parsed = data;
+    if (typeof data === 'string') {
+      try { parsed = JSON.parse(data); } catch { return; }
+    }
     lastData = parsed;
     notifyCallbacks(parsed);
   }

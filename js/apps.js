@@ -1,7 +1,6 @@
 /**********************************************
  * Модуль: Приложения
- * [FIX] Возврат к оригинальному алгоритму из v2.1:
- *       получение через android.getUserApps() и жесткий base64.
+ * [FIX] Баг #11: перед makeLongPressable снимаем старые обработчики longpress.
  **********************************************/
 
 modules.apps = (function() {
@@ -24,15 +23,16 @@ modules.apps = (function() {
       grid.innerHTML = '';
       let apps = [];
       try {
-        // ТОЧНО КАК В ПЕРВОЙ ВЕРСИИ
         const appsRaw = android.getUserApps();
-        apps = JSON.parse(appsRaw);
+        if (appsRaw) {
+          apps = typeof appsRaw === 'string' ? JSON.parse(appsRaw) : appsRaw;
+        }
       } catch (e) {
         console.error('[Apps] Ошибка получения приложений:', e);
         apps = [];
       }
       
-      if (!apps || !apps.length) {
+      if (!Array.isArray(apps) || !apps.length) {
         grid.innerHTML = '<div style="grid-column:1/-1;padding:20px;text-align:center;">Нет установленных приложений</div>';
         return;
       }
@@ -42,7 +42,6 @@ modules.apps = (function() {
         d.className = 'picker-item';
         
         const img = document.createElement('img');
-        // ТОЧНО КАК В ПЕРВОЙ ВЕРСИИ
         img.src = `data:image/png;base64,${app.icon}`;
         
         const nameSpan = document.createElement('span');
@@ -61,7 +60,6 @@ modules.apps = (function() {
           const slotEl = document.querySelector(`.app_slot[data-slot="${currentPickerSlot}"]`);
           if (slotEl) {
             slotEl.setAttribute('data-app-name', app.name);
-            // ТОЧНО КАК В ПЕРВОЙ ВЕРСИИ
             slotEl.innerHTML = `<img src="data:image/png;base64,${app.icon}">`;
             
             const showLabels = storage.load('setting_showAppLabels');
@@ -93,7 +91,6 @@ modules.apps = (function() {
       return;
     }
     
-    // ТОЧНО КАК В ПЕРВОЙ ВЕРСИИ
     slotElement.innerHTML = `<img src="data:image/png;base64,${saved.icon}">`;
     slotElement.setAttribute('data-app-name', saved.name);
     
@@ -119,10 +116,10 @@ modules.apps = (function() {
     slots.forEach(slot => {
       const slotId = slot.dataset.slot;
       
-      const oldClickHandler = slot._clickHandler;
-      const oldLongPressHandler = slot._longPressHandler;
-      if (oldClickHandler) slot.removeEventListener('click', oldClickHandler);
-      if (oldLongPressHandler) slot.removeEventListener('contextmenu', oldLongPressHandler);
+      if (slot._clickHandler) {
+        slot.removeEventListener('click', slot._clickHandler);
+        slot._clickHandler = null;
+      }
       
       const clickHandler = (e) => {
         e.stopPropagation();
@@ -137,7 +134,7 @@ modules.apps = (function() {
         if (!saved) {
           openPickerForSlot(slot);
         } else {
-          if (saved.package && typeof android.runApp === 'function') {
+          if (saved.package) {
             try {
               android.runApp(saved.package);
             } catch(e) {
@@ -155,9 +152,8 @@ modules.apps = (function() {
       };
       
       slot._clickHandler = clickHandler;
-      slot._longPressHandler = longPressHandler;
-      
       slot.addEventListener('click', clickHandler);
+      // makeLongPressable сам снимает старые обработчики через _lpHandlers.teardown()
       makeLongPressable(slot, longPressHandler, { delay: 700, preventDefaultOnStart: false });
     });
   }

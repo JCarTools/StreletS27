@@ -1,20 +1,6 @@
 /**********************************************
  * Модуль: Индикатор сети внутри виджета данных
- * [UX] Индикатор в верхней зоне виджета #widgetPlaceholder.
- * [SETTINGS] showNetworkStatus скрывает/показывает ВЕСЬ виджет
- *            (сеть + топливо + АКБ), а не только значок.
- * [COLOR] Нежно-голубой #7BA7FF (в тон active-кнопок)
- * [NEW] Трёхпозиционный индикатор для условий белых списков (РФ):
- *       0 — нет сети вообще (красный крест)
- *       1 — частичная блокировка (Wi-Fi в красном круге)
- *       2 — полный интернет (Wi-Fi #7BA7FF)
- * [FIX] Promise.race с таймаутом — checking не зависнет даже без AbortController
- * [FIX] Image()-fallback — если fetch с no-cors не резолвится в WebView
- * [FIX] visibilitychange — мгновенная проверка при возврате на вкладку
- * [NEW] Подсказка при клике на индикатор — показывает текущее состояние сети
- * [FIX] Белый сервер — app.jcartools.ru
- * [DIAG] 10 кликов по значку сети → diag открывает плашку.
- *        В этом случае проверка сети и toast НЕ запускаются.
+ * [FIX] Баг #4: applyVisibilityFromSettings учитывает off-mode корректно.
  **********************************************/
 
 modules.network = (function() {
@@ -27,7 +13,7 @@ modules.network = (function() {
   const widget = document.getElementById('widgetPlaceholder');
 
   if (!btn || !icon) {
-    return { init() {}, stopAutoCheck() {}, setVisible() {}, check() {} };
+    return { init() {}, stopAutoCheck() {}, setVisible() {}, check() {}, forceStatus() {} };
   }
 
   const WHITE_URLS = [
@@ -51,6 +37,7 @@ modules.network = (function() {
 
   const FETCH_TIMEOUT_MS = 4000;
   const IMG_TIMEOUT_MS = 4000;
+  const TOTAL_CHECK_TIMEOUT_MS = 12000;
   const TOAST_DURATION_MS = 2500;
 
   const STATUS_HINTS = {
@@ -62,8 +49,6 @@ modules.network = (function() {
   function showStatusHint(text) {
     if (typeof showToast === 'function') {
       showToast(text, TOAST_DURATION_MS);
-    } else if (typeof console !== 'undefined') {
-      console.log('[Network]', text);
     }
   }
 
@@ -182,14 +167,13 @@ modules.network = (function() {
     if (showHintAfter) showStatusHint('🔄 Проверка сети...');
 
     let resultStatus = 0;
+
     try {
       if (typeof navigator !== 'undefined' && navigator.onLine === false) {
         resultStatus = 0;
       } else {
-        const [openOk, whiteOk] = await Promise.all([
-          checkGroup(OPEN_URLS, OPEN_IMG_URLS),
-          checkGroup(WHITE_URLS, WHITE_IMG_URLS)
-        ]);
+        const whiteOk = await checkGroup(WHITE_URLS, WHITE_IMG_URLS);
+        const openOk = await checkGroup(OPEN_URLS, OPEN_IMG_URLS);
 
         if (openOk) resultStatus = 2;
         else if (whiteOk) resultStatus = 1;
@@ -197,7 +181,7 @@ modules.network = (function() {
       }
       setStatus(resultStatus);
     } catch (e) {
-      warn('[Network] check error:', e);
+      console.warn('[Network] check error:', e);
       resultStatus = 0;
       setStatus(0);
     } finally {
@@ -212,13 +196,18 @@ modules.network = (function() {
     if (checkInterval) { clearInterval(checkInterval); checkInterval = null; }
   }
 
+  function forceStatus(newStatus) {
+    if ([0, 1, 2].includes(newStatus)) {
+      setStatus(newStatus);
+      showStatusHint('Принудительно установлен статус: ' + newStatus);
+    }
+  }
+
   function init() {
     applyVisibilityFromSettings();
     check();
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
-      // [DIAG] Если это серия из 10 кликов — diag откроет плашку,
-      // а мы НЕ запускаем проверку сети и НЕ показываем toast.
       if (typeof diag !== 'undefined' && diag.handleNetworkClick()) return;
       if (!checking) {
         check(true);
@@ -241,5 +230,5 @@ modules.network = (function() {
     });
   }
 
-  return { init, stopAutoCheck, check, setVisible: applyVisibilityFromSettings };
+  return { init, stopAutoCheck, check, setVisible: applyVisibilityFromSettings, forceStatus };
 })();
