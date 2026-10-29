@@ -271,9 +271,18 @@ body:not(.off-mode) .dashboard {
   visibility: visible;
 }
 
-/* Жесткий показ иконки сети в OFF-mode (если она не скрыта настройками) */
+/* OFF-mode: иконка сети по настройке — показываем/скрываем без !important. */
 body.off-mode #btnNetwork {
-  opacity: 1 !important;
-  visibility: visible !important;
-  z-index: 999 !important;
+  opacity: 1;
+  visibility: visible;
+  z-index: 999;
+}
+
+/* Скрытие виджета сети в OFF-mode через класс (управляется JS) */
+body.off-mode #networkWidgetWrapper.off-mode-hidden,
+body.off-mode #networkWidgetWrapper.off-mode-hidden #btnNetwork {
+  display: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
 }

@@ -1,7 +1,12 @@
 /**********************************************
  * Модуль: Климат (2x3)
- * [FIX] Все иконки принудительно белые (включая багажник и рециркуляцию).
- * [FIX] Цвет trunk-иконки всегда белый.
+ * [FIX] Все иконки принудительно белые/чёрные согласно настройке.
+ * [FIX] Иконка багажника: icons/Trunk_open.svg
+ * [NEW] Вентилятор: цикл 1→2→...→10→1 (без нуля), обратная связь из climate_get_state.
+ * [NEW] Защита от "моргания" вентилятора.
+ * [FIX] Отправка команд климата через requestCarCommandAsync.
+ * [FIX] Кнопка "Выключить всё" работает через runEnum, пропускает вентилятор.
+ * [FIX] updateIconColors перерисовывает все слоты (включая SVG вентилятора).
  **********************************************/
 
 modules.climate = (function() {
@@ -14,16 +19,19 @@ modules.climate = (function() {
   let optimisticActions = Object.create(null);
   const OPTIMISTIC_MS = 3000;
   let optimisticSweepTimer = null;
+  let climatePollTimer = null;
+
+  let bootProtection = true; 
 
   const ACTION_STATE_COMMANDS = {
-    heat_wheel_on: { key: "rulHeat", value: true },
-    heat_wheel_off: { key: "rulHeat", value: false },
-    heat_windshield_on: { key: "lobHeat", value: true },
-    heat_windshield_off: { key: "lobHeat", value: false },
-    heat_rearwindow_on: { key: "zadHeat", value: true },
-    heat_rearwindow_off: { key: "zadHeat", value: false },
-    Recirculation_On: { key: "recirculation", value: true },
-    Recirculation_Off: { key: "recirculation", value: false }
+    heat_wheel_on: { key: "rulHeat", value: true, apiCmd: "climate_set_steering_wheel_heat" },
+    heat_wheel_off: { key: "rulHeat", value: false, apiCmd: "climate_set_steering_wheel_heat" },
+    heat_windshield_on: { key: "lobHeat", value: true, apiCmd: "climate_set_front_glass_heat" },
+    heat_windshield_off: { key: "lobHeat", value: false, apiCmd: "climate_set_front_glass_heat" },
+    heat_rearwindow_on: { key: "zadHeat", value: true, apiCmd: "climate_set_rear_defrost" },
+    heat_rearwindow_off: { key: "zadHeat", value: false, apiCmd: "climate_set_rear_defrost" },
+    Recirculation_On: { key: "recirculation", value: true, apiCmd: "climate_set_recirculation" },
+    Recirculation_Off: { key: "recirculation", value: false, apiCmd: "climate_set_recirculation" }
   };
 
   function loadCommands() {
@@ -40,7 +48,8 @@ modules.climate = (function() {
       { cmd: "vent_zad_seat_l", label: climateLabelFor("vent_zad_seat_l"), max: 3, icon: "icons/Seat vent_left.svg", off: "vent_zad_seat_l_0" },
       { cmd: "vent_zad_seat_r", label: climateLabelFor("vent_zad_seat_r"), max: 3, icon: "icons/Seat vent_right.svg", off: "vent_zad_seat_r_off" },
       { cmd: "Recirculation_On", label: climateLabelFor("Recirculation_On"), max: 1, icon: "icons/Recirculation.svg", off: "Recirculation_Off" },
-      { cmd: "trunk", label: "Багажник", max: 1, icon: "TRUNK_SVG", off: "trunk" },
+      { cmd: "fan_speed", label: "Вентилятор", min: 1, max: 10, icon: "FAN_SVG", off: null },
+      { cmd: "trunk", label: "Багажник", max: 1, icon: "icons/Trunk_open.svg", off: "trunk" },
       { cmd: "voditel_seat_1", label: climateLabelFor("voditel_seat_1"), max: 1, icon: "icons/Driver.svg" },
       { cmd: "voditel_seat_2", label: climateLabelFor("voditel_seat_2"), max: 1, icon: "icons/Driver.svg" },
       { cmd: "voditel_seat_3", label: climateLabelFor("voditel_seat_3"), max: 1, icon: "icons/Driver.svg" }
@@ -51,14 +60,14 @@ modules.climate = (function() {
     return cmd.off || `${cmd.cmd}_0`;
   }
 
-  function getTrunkSvg() {
-    // Всегда белый цвет
-    return `<svg viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width: 100%; height: 100%; display: block;">
-      <path d="M3 17h18" />
-      <path d="M7 17l-1.5-4.5A2 2 0 0 1 7.4 10h4.2" />
-      <path d="M13 10h4.6a2 2 0 0 1 1.9 1.3L21 17" />
-      <path d="M12 10V6a2 2 0 0 1 2-2h3" />
-      <path d="M16 2l3 2-3 2" />
+  function getIconColorHex() {
+    const colorSetting = storage.load('setting_climateIconColor') || 'Белый';
+    return (colorSetting === 'Чёрный' || colorSetting === 'Черный') ? '#000000' : '#ffffff';
+  }
+
+  function getFanSvg(color = '#fff') {
+    return `<svg viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 100%; height: 100%; display: block;">
+      <path d="M9.59 4.59A2 2 0 1 1 11 8H2m10.59 11.41A2 2 0 1 0 14 16H2m15.73-8.27A2.5 2.5 0 1 1 19.5 12H2"/>
     </svg>`;
   }
 
@@ -81,15 +90,32 @@ modules.climate = (function() {
       lvl = climateState[saved] || 0;
     }
 
-    const dots = Array.from({ length: c.max }, (_, i) => `<span class="climate-dot${i < lvl ? ' on' : ''}"></span>`).join('');
-    
-    let iconHtml = '';
-    if (saved === 'trunk') {
-      iconHtml = `<div class="climate-svg-icon" style="width: 2.2rem; height: 2.2rem; margin-bottom: 0.3rem;">${getTrunkSvg()}</div>`;
-    } else {
-      // Принудительно делаем иконку белой через CSS-фильтр
-      iconHtml = `<img src="${c.icon}" style="filter: brightness(0) invert(1) !important;">`;
+    const iconColor = getIconColorHex();
+
+    if (saved === 'fan_speed') {
+      const displayVal = lvl === 0 ? '—' : lvl;
+      const isActive = lvl > 0;
+      s.innerHTML = `
+        <div class="climate-svg-icon" style="width: 2.2rem; height: 2.2rem; margin-bottom: 0.3rem;">${getFanSvg(iconColor)}</div>
+        <div class="climate-label">${c.label}</div>
+        <div class="climate-fan-value" style="
+          font-size: 0.8rem; 
+          font-weight: 700;
+          line-height: 1; 
+          color: rgba(244,248,255,${isActive ? '0.95' : '0.45'}); 
+          font-variant-numeric: tabular-nums;
+          margin-top: 0.2rem;
+          padding: 0;
+          position: relative;
+        ">${displayVal}</div>
+      `;
+      s.classList.toggle('active', lvl > 0);
+      return;
     }
+
+    const dots = Array.from({ length: c.max }, (_, i) => `<span class="climate-dot${i < lvl ? ' on' : ''}"></span>`).join('');
+
+    const iconHtml = `<img src="${c.icon}" class="climate-icon">`;
 
     s.innerHTML = `${iconHtml}<div class="climate-label">${c.label.replace(/\\n/g,'<br>')}</div><div class="climate-dots">${dots}</div>`;
     s.classList.toggle('active', lvl > 0);
@@ -99,6 +125,14 @@ modules.climate = (function() {
     document.querySelectorAll('.climate_slot').forEach(renderSlot);
   }
 
+  function updateIconColors() {
+    document.querySelectorAll('.climate_slot').forEach(renderSlot);
+    const color = storage.load('setting_climateIconColor') || 'Белый';
+    const isWhite = color === 'Белый';
+    document.body.classList.toggle('climate-icons-white', isWhite);
+    document.body.classList.toggle('climate-icons-black', !isWhite);
+  }
+
   function normalizeLevel(value) {
     const level = Number(value);
     if (!Number.isFinite(level)) return null;
@@ -106,6 +140,14 @@ modules.climate = (function() {
     if (rounded === 0) return 0;
     if (rounded >= 1 && rounded <= 4) return rounded - 1;
     return null;
+  }
+
+  function normalizeFanLevel(value) {
+    const level = Number(value);
+    if (!Number.isFinite(level)) return null;
+    const rounded = Math.round(level);
+    if (rounded < 0 || rounded > 10) return null;
+    return rounded;
   }
 
   function normalizeBoolean(value) {
@@ -156,6 +198,35 @@ modules.climate = (function() {
     if (optimisticSweepTimer) { clearInterval(optimisticSweepTimer); optimisticSweepTimer = null; }
   }
 
+  async function pollClimateState() {
+    if (typeof android === 'undefined' || typeof android.requestCarCommandAsync !== 'function') return;
+    if (document.hidden) return;
+
+    try {
+      const res = await android.requestCarCommandAsync(JSON.stringify({ cmd: 'climate_get_state' }), 2000);
+      if (res && res.success) {
+        applyCarData({
+          fanSpeed: res.fanSpeed,
+          climate: {
+            recirculation: res.recirculation,
+            frontGlassHeat: res.frontGlassHeat,
+            rearDefrost: res.rearDefrost,
+            steeringWheelHeat: res.steeringWheelHeat
+          }
+        });
+      }
+    } catch (e) {}
+  }
+
+  function startPolling() {
+    stopPolling();
+    climatePollTimer = setInterval(pollClimateState, 5000);
+  }
+
+  function stopPolling() {
+    if (climatePollTimer) { clearInterval(climatePollTimer); climatePollTimer = null; }
+  }
+
   function applyCarData(raw) {
     if (!raw) return;
     let payload;
@@ -202,12 +273,41 @@ modules.climate = (function() {
       }
     });
 
+    const fanRaw = payload.fanSpeed;
+    if (fanRaw !== undefined && fanRaw !== null) {
+      const fanLevel = normalizeFanLevel(fanRaw);
+      if (fanLevel !== null) {
+        const optimistic = optimisticLevels['fan_speed'];
+        let skip = false;
+        if (optimistic && now < optimistic.until) {
+          if (fanLevel !== optimistic.level) skip = true;
+          else delete optimisticLevels['fan_speed'];
+        }
+        if (bootProtection && fanLevel === 0) skip = true;
+        const currentLvl = climateState['fan_speed'] || 0;
+        if (currentLvl > 0 && fanLevel === 0) skip = true;
+
+        if (!skip && climateState['fan_speed'] !== fanLevel) {
+          climateState['fan_speed'] = fanLevel;
+          changed = true;
+        }
+      }
+    }
+
     const heat = payload.heat || payload;
     Object.keys(ACTION_STATE_COMMANDS).forEach(cmd => {
       if (cmd.startsWith('Recirculation')) return;
       const mapping = ACTION_STATE_COMMANDS[cmd];
-      const value = normalizeBoolean(heat[mapping.key]);
+      
+      let value = null;
+      if (payload.climate && payload.climate[mapping.apiCmd.replace('climate_set_', '')] !== undefined) {
+         value = normalizeBoolean(payload.climate[mapping.apiCmd.replace('climate_set_', '')]);
+      } else if (heat && heat[mapping.key] !== undefined) {
+         value = normalizeBoolean(heat[mapping.key]);
+      }
+
       if (value == null) return;
+      
       const optimistic = optimisticActions[mapping.key];
       if (optimistic && now < optimistic.until) {
         if (value !== optimistic.value) return;
@@ -220,7 +320,13 @@ modules.climate = (function() {
       }
     });
 
-    const recircVal = findKeyRecursive(payload, ['recirculation', 'recirc', 'air_circulation', 'circle']);
+    let recircVal = null;
+    if (payload.climate && payload.climate.recirculation !== undefined) {
+       recircVal = normalizeBoolean(payload.climate.recirculation);
+    } else {
+       recircVal = findKeyRecursive(payload, ['recirculation', 'recirc', 'air_circulation', 'circle']);
+    }
+
     if (recircVal !== null) {
       const optimistic = optimisticActions['recirculation'];
       let skip = false;
@@ -240,6 +346,18 @@ modules.climate = (function() {
     if (changed) updateAll();
   }
 
+  function sendFanSpeed(value) {
+    if (window.androidApi && typeof window.androidApi.requestCarCommandAsync === 'function') {
+      window.androidApi.requestCarCommandAsync(
+        getToken(),
+        'fan_' + Date.now(),
+        JSON.stringify({ cmd: 'climate_set_fan_speed', value: value })
+      );
+    } else if (typeof android.runEnum === 'function') {
+      android.runEnum(`fan_speed_${value}`);
+    }
+  }
+
   function onSlotClick(slotElement) {
     const slotId = slotElement.dataset.climateSlot;
     const saved = storage.load(`climate_slot_${slotId}`);
@@ -255,7 +373,6 @@ modules.climate = (function() {
       } else if (typeof android.runEnum === 'function') {
         android.runEnum(cmdToSend);
       }
-      
       trunkOpen = !trunkOpen;
       storage.save('climateTrunkOpen', trunkOpen);
       renderSlot(slotElement);
@@ -269,17 +386,25 @@ modules.climate = (function() {
       return;
     }
 
+    if (saved === 'fan_speed') {
+      const cur = climateState['fan_speed'] || 0;
+      let next = cur === 0 ? 1 : (cur >= 10 ? 1 : cur + 1);
+
+      climateState['fan_speed'] = next;
+      optimisticLevels['fan_speed'] = { level: next, until: Date.now() + OPTIMISTIC_MS };
+      renderSlot(slotElement);
+
+      sendFanSpeed(next);
+      return;
+    }
+
     const curLvl = climateState[saved] || 0;
     const maxLvl = c.max || 1;
     
     let next;
-    if (curLvl === 0) {
-      next = maxLvl;
-    } else if (curLvl === 1) {
-      next = 0;
-    } else {
-      next = curLvl - 1;
-    }
+    if (curLvl === 0) next = maxLvl;
+    else if (curLvl === 1) next = 0;
+    else next = curLvl - 1;
     
     climateState[saved] = next;
     
@@ -293,12 +418,26 @@ modules.climate = (function() {
     
     renderSlot(slotElement);
 
-    let cmdToSend;
-    if (next === 0) cmdToSend = getOff(c);
-    else if (c.max === 1) cmdToSend = saved;
-    else cmdToSend = `${saved}_${next}`;
-    
-    android.runEnum(cmdToSend);
+    if (ACTION_STATE_COMMANDS[saved] && window.androidApi && typeof window.androidApi.requestCarCommandAsync === 'function') {
+        const mapping = ACTION_STATE_COMMANDS[saved];
+        window.androidApi.requestCarCommandAsync(
+          getToken(),
+          'climate_' + Date.now(),
+          JSON.stringify({ cmd: mapping.apiCmd, value: next > 0 })
+        );
+    } else if (saved === 'Recirculation_On' && window.androidApi && typeof window.androidApi.requestCarCommandAsync === 'function') {
+        window.androidApi.requestCarCommandAsync(
+          getToken(),
+          'climate_' + Date.now(),
+          JSON.stringify({ cmd: 'climate_set_recirculation', value: next > 0 })
+        );
+    } else {
+        let cmdToSend;
+        if (next === 0) cmdToSend = getOff(c);
+        else if (c.max === 1) cmdToSend = saved;
+        else cmdToSend = `${saved}_${next}`;
+        android.runEnum(cmdToSend);
+    }
   }
 
   function initSlots() {
@@ -316,15 +455,18 @@ modules.climate = (function() {
     const grid = document.getElementById('climate-picker-grid');
     if (!picker || !grid) return;
     grid.innerHTML = '';
+
+    const iconColor = getIconColorHex();
+
     climateCommands.forEach(cmd => {
       const d = document.createElement('div');
       d.className = 'picker-item';
       
-      let iconHtml = '';
-      if (cmd.cmd === 'trunk') {
-         iconHtml = `<div style="width: 2.2rem; height: 2.2rem; margin: 0 auto 0.5rem;">${getTrunkSvg()}</div>`;
+      let iconHtml;
+      if (cmd.cmd === 'fan_speed') {
+        iconHtml = `<div style="width: 2.2rem; height: 2.2rem; margin: 0 auto 0.5rem;">${getFanSvg(iconColor)}</div>`;
       } else {
-         iconHtml = `<img src="${cmd.icon}" style="filter: brightness(0) invert(1) !important;">`;
+        iconHtml = `<img src="${cmd.icon}" class="picker-icon">`;
       }
       
       d.innerHTML = `${iconHtml}<span>${cmd.label.replace(/\\n/g,' ')}</span>`;
@@ -349,11 +491,14 @@ modules.climate = (function() {
   function init() {
     loadCommands();
     initSlots();
-    updateAll();
+    updateIconColors();
     startOptimisticSweep();
+    startPolling();
     
     if (modules.carData) modules.carData.subscribe(applyCarData);
     
+    setTimeout(() => { bootProtection = false; }, 10000);
+
     document.getElementById('climate-picker-close')?.addEventListener('click', () => {
       document.getElementById('climate-picker')?.classList.remove('open');
     });
@@ -365,6 +510,8 @@ modules.climate = (function() {
         const saved = storage.load(`climate_slot_${id}`);
         if (!saved) return;
         if (saved === 'trunk') return;
+        if (saved === 'fan_speed') return;
+
         const c = climateCommands.find(x => x.cmd === saved);
         if (c && (climateState[saved] || 0) > 0) {
           android.runEnum(getOff(c));
@@ -379,7 +526,8 @@ modules.climate = (function() {
 
   function destroy() {
     stopOptimisticSweep();
+    stopPolling();
   }
 
-  return { init, updateState: applyCarData, destroy, reinitSlots };
+  return { init, updateState: applyCarData, destroy, reinitSlots, updateIconColors };
 })();

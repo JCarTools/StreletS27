@@ -76,14 +76,69 @@ body.light .climate_slot {
   transform: translateY(-1px);
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 10px 18px rgba(0,0,0,0.12);
 }
+
+/* Иконки климата: размеры и цвет через CSS-классы на body. */
+.climate_slot img.climate-icon,
 .climate_slot img {
   width: 2.2rem;
   height: 2.2rem;
   object-fit: contain;
   margin-bottom: 0.3rem;
   flex-shrink: 0;
+  opacity: 0.92;
+  transition: filter 0.15s ease, opacity 0.15s ease;
 }
-body.light .climate_slot img { filter: none; opacity: 0.8; }
+
+body.climate-icons-white .climate_slot img.climate-icon,
+body.climate-icons-white .climate_slot img,
+body.climate-icons-white .picker-icon {
+  filter: brightness(0) invert(1);
+  opacity: 0.92;
+}
+
+body.climate-icons-black .climate_slot img.climate-icon,
+body.climate-icons-black .climate_slot img,
+body.climate-icons-black .picker-icon {
+  filter: brightness(0);
+  opacity: 0.85;
+}
+
+body.light.climate-icons-white .climate_slot img.climate-icon,
+body.light.climate-icons-white .climate_slot img,
+body.light.climate-icons-white .picker-icon {
+  filter: brightness(0) invert(1);
+  opacity: 0.92;
+}
+
+body.light.climate-icons-black .climate_slot img.climate-icon,
+body.light.climate-icons-black .climate_slot img,
+body.light.climate-icons-black .picker-icon {
+  filter: brightness(0);
+  opacity: 0.85;
+}
+
+/* Trunk SVG */
+.climate-svg-icon,
+.picker-svg-icon {
+  width: 2.2rem;
+  height: 2.2rem;
+  margin-bottom: 0.3rem;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.climate-svg-icon .climate-trunk-svg,
+.picker-svg-icon .climate-trunk-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.climate-placeholder {
+  font-size: 1.5rem;
+  opacity: 0.5;
+}
 
 .climate-label {
   font-size: 0.58rem;
@@ -819,6 +874,8 @@ body.light .weather-details { color: rgba(66, 76, 97, 0.7); }
   justify-content: stretch;
   opacity: var(--widget-opacity, 1);
   background: rgba(0, 0, 0, 0.5);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .widget_navigation.widget-hidden {
@@ -1033,3 +1090,102 @@ body:not(.widgets-hidden) .brand-footer {
   pointer-events: auto;
   transition: opacity 0.3s ease;
 }
+
+/* === SPEEDTEST OVERLAY === */
+.speedtest-overlay {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0.94);
+  min-width: 320px;
+  max-width: 90vw;
+  background: rgba(20, 25, 35, 0.95);
+  color: #fff;
+  padding: 1.1rem 1.4rem;
+  border-radius: 1.1rem;
+  z-index: 100000;
+  font-family: sans-serif;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  text-align: left;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+.speedtest-overlay.visible {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}
+.speedtest-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin-bottom: 0.7rem;
+  text-align: center;
+  letter-spacing: 0.02em;
+}
+.speedtest-progress {
+  height: 4px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+  margin-bottom: 0.9rem;
+}
+.speedtest-progress-bar {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, rgba(100, 150, 255, 0.95), rgba(70, 110, 200, 0.9));
+  border-radius: inherit;
+  transition: width 0.35s ease;
+}
+
+/* Идеальное выравнивание флексом */
+.speedtest-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+.speedtest-row:last-child {
+  border-bottom: none;
+  padding-bottom: 0.1rem;
+}
+
+.speedtest-label {
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.75);
+  flex: 1;
+}
+.speedtest-label--ru { color: #ff6b6b; }
+.speedtest-label--ru-up { color: #ff9f43; }
+.speedtest-label--world { color: #4285F4; }
+.speedtest-label--world-up { color: #34a853; }
+
+.speedtest-value {
+  font-family: 'SF Mono', 'Monaco', monospace;
+  font-weight: 600;
+  color: rgba(244, 247, 252, 0.95);
+  text-align: right;
+  width: 50px;
+  flex-shrink: 0;
+}
+
+.speedtest-ping {
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.55);
+  font-family: 'SF Mono', 'Monaco', monospace;
+  text-align: right;
+  white-space: nowrap;
+  width: 90px;
+  flex-shrink: 0;
+}
+
+body.light .speedtest-overlay { background: rgba(240, 243, 250, 0.96); border-color: rgba(88, 102, 134, 0.15); color: #1c2330; }
+body.light .speedtest-label { color: rgba(50, 60, 80, 0.75); }
+body.light .speedtest-value { color: rgba(28, 35, 48, 0.95); }
+body.light .speedtest-ping { color: rgba(50, 60, 80, 0.6); }
+body.light .speedtest-progress { background: rgba(0, 0, 0, 0.08); }
+body.light .speedtest-row { border-bottom-color: rgba(0, 0, 0, 0.05); }

@@ -5,6 +5,8 @@
  * [FIX] applyThemeNow(force) — принудительное применение темы.
  * [FIX] Тема применяется при каждом кадре и при каждой подписке.
  * [FIX] Тема зависит ТОЛЬКО от настройки дашборда, не от данных моста.
+ * [NEW] Клик по мини-карте запускает навигатор.
+ * [NEW] EventBus: miniMapFrame через подписку, без переопределения onAndroidEvent.
  **********************************************/
 
 modules.navigation = (function() {
@@ -17,6 +19,9 @@ modules.navigation = (function() {
   let autoThemeInterval = null;
   let lastFrameAt = 0;
   let themeReassertTimer = null;
+  let clickHandlerAttached = false;
+
+  const DEFAULT_NAV_PACKAGE = 'ru.yandex.yandexnavi';
 
   function isEnabledInSettings() {
     return storage.load('setting_showMiniMap') === true;
@@ -57,7 +62,7 @@ modules.navigation = (function() {
   }
 
   function getTargetTheme() {
-    const setting = storage.load('setting_miniMapTheme'); // 'day', 'night' или 'auto'
+    const setting = storage.load('setting_miniMapTheme');
     if (setting === 'day') return 'day';
     if (setting === 'night') return 'night';
     if (setting === 'auto') return getAutoTheme();
@@ -103,7 +108,6 @@ modules.navigation = (function() {
         try { JSON.parse(res); } catch (e) { /* noop */ }
       }
       subscribed = true;
-      // Сбрасываем кэш темы, чтобы после подписки тема ушла в Android заново
       themeApplied = null;
       applyTheme(true);
     } catch (e) {
@@ -140,9 +144,6 @@ modules.navigation = (function() {
     }
     clearTimeout(noDataTimeout);
 
-    // Принудительно переприменяем тему после каждого кадра.
-    // Это гарантирует, что даже если Android сменил тему сам,
-    // дашборд её вернёт к настройке пользователя.
     if (themeApplied !== getTargetTheme()) {
       applyTheme(true);
     } else {
@@ -150,14 +151,56 @@ modules.navigation = (function() {
     }
   }
 
+  function launchNavigator(e) {
+    if (e) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+    const pkg = storage.load('setting_navigatorPackage') || DEFAULT_NAV_PACKAGE;
+    try {
+      if (window.androidApi && typeof window.androidApi.runApp === 'function') {
+        const res = window.androidApi.runApp(getToken(), pkg);
+        let parsed = res;
+        if (typeof res === 'string') {
+          try { parsed = JSON.parse(res); } catch (err) { /* noop */ }
+        }
+        if (parsed && parsed.error) {
+          console.warn('[Navigation] runApp error:', parsed.error);
+          if (typeof showToast === 'function') showToast('Не удалось запустить навигатор', 2000);
+        }
+      } else if (typeof android !== 'undefined' && typeof android.runApp === 'function') {
+        android.runApp(pkg);
+      }
+    } catch (err) {
+      console.warn('[Navigation] launchNavigator error:', err);
+      if (typeof showToast === 'function') showToast('Ошибка запуска навигатора', 2000);
+    }
+  }
+
+  function attachClickHandler() {
+    if (!widgetEl || clickHandlerAttached) return;
+    widgetEl.style.cursor = 'pointer';
+    widgetEl.addEventListener('click', launchNavigator);
+    clickHandlerAttached = true;
+    if (typeof attachOemTouchFeedback === 'function') {
+      attachOemTouchFeedback(widgetEl);
+    }
+  }
+
   function refresh() {
     applyVisibility();
     applyTheme(true);
+    attachClickHandler();
   }
 
   function init() {
     applyVisibility();
     applyTheme(true);
+    attachClickHandler();
+
+    if (typeof EventBus !== 'undefined') {
+      EventBus.on('miniMapFrame', onMiniMapFrame);
+    }
 
     if (autoThemeInterval) clearInterval(autoThemeInterval);
     autoThemeInterval = setInterval(function() {
@@ -165,20 +208,11 @@ modules.navigation = (function() {
       if (currentSetting === 'auto') {
         applyTheme(true);
       } else {
-        // Не авто — перепроверяем, вдруг Android сбросил тему
         if (themeApplied !== getTargetTheme()) {
           applyTheme(true);
         }
       }
     }, 15000);
-
-    const _origOnAndroidEventNav = window.onAndroidEvent;
-    window.onAndroidEvent = function(type, data) {
-      if (type === 'miniMapFrame') onMiniMapFrame(data);
-      if (typeof _origOnAndroidEventNav === 'function') {
-        try { _origOnAndroidEventNav(type, data); } catch (e) {}
-      }
-    };
 
     window.addEventListener('storage', function(e) {
       if (e.key === 'setting_showMiniMap') {

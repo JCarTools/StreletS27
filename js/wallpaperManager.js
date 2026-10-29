@@ -2,6 +2,7 @@
  * Модуль: Управление статическими обоями
  * [FIX] Баг #7: рендер user-обоев через Promise.all (без N+1).
  * [FIX] Лимит на файл: 10 МБ, сжатие до 3.5 МБ.
+ * [NEW] В загрузке обоев из Downloads клик по строке с файлом теперь ставит галочку.
  **********************************************/
 
 modules.wallpaperManager = (function() {
@@ -217,13 +218,18 @@ modules.wallpaperManager = (function() {
       const cancelBtn = content.querySelector('.wm-btn-cancel');
       const closeBtn = content.querySelector('.wm-picker-close');
 
+      // ИСПОЛЬЗУЕМ <label> ВМЕСТО <div> ДЛЯ ВОЗМОЖНОСТИ КЛИКАТЬ ПО ВСЕЙ СТРОКЕ
       images.forEach(img => {
-        const item = document.createElement('div');
+        const item = document.createElement('label');
         item.className = 'wm-picker-item';
+        
         const sizeMb = (img.size / (1024 * 1024)).toFixed(2);
         const tooLarge = img.size > MAX_FILE_SIZE;
+        
         item.innerHTML = `
-          <div class="wm-picker-cb-wrap"><input type="checkbox" class="wm-picker-cb" data-name="${img.name}" ${tooLarge ? 'disabled' : ''}></div>
+          <div class="wm-picker-cb-wrap">
+            <input type="checkbox" class="wm-picker-cb" data-name="${img.name}" ${tooLarge ? 'disabled' : ''}>
+          </div>
           <div class="wm-picker-name">${img.name}</div>
           <div class="wm-picker-size ${tooLarge ? 'wm-over' : ''}">${sizeMb} МБ${tooLarge ? ' (>10МБ)' : ''}</div>
         `;
@@ -343,7 +349,6 @@ modules.wallpaperManager = (function() {
 
     counter.textContent = `Пользовательских: ${userList.length} / ${MAX_USER_WALLPAPERS}`;
 
-    // Параллельно подтягиваем данные user-обоев
     const userEntries = await Promise.all(userList.map(async (u) => {
       const data = await idbStore.get(IDB_CUSTOM_WALLPAPER_DATA_PREFIX + u.id);
       const url = data ? makeBlobUrlFromBase64(data) : '';

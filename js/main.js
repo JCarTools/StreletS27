@@ -3,30 +3,38 @@
  * [FIX] Баг #8: двойной тап работает и в не-video режиме.
  * [FIX] Баг #15: attachOemTouchFeedback для новых слотов.
  * [FIX] После onJsReady — принудительно применяем тему мини-карты.
+ * [FIX] Синхронизация двойного тапа и долгого нажатия (не считаем long-press двойным тапом).
+ * [FIX] Обработчик клика по фону не срабатывает после long-press.
+ * [FIX] isBackgroundElement учитывает зоны температуры и карусель.
  * [NEW] Настройки разделены: settings.js (модалка) + sidebar-settings.js (аккордеон).
+ * [NEW] EventBus: централизованная маршрутизация onAndroidEvent.
+ * [NEW] Модуль climate-temp: свайп-регулировка температуры.
+ * [NEW] Закрытие сайдбара по тапу на подложку (sidebarOverlay).
+ * [NEW] Модуль widgets-reorder: перестановка виджетов по горизонтали.
+ * [NEW] Долгое нажатие на фон — сохранение текущих обоев в «Ваши обои».
+ * [FIX] Сброс состояния volume-swipe после confirm.
+ * [FIX] При закрытии сайдбара аккордеон автосмены всегда сворачивается.
+ * [NEW] Вызов modules.onboarding.init() с задержкой в initUI.
  **********************************************/
 
-let originalOnAndroidEvent = window.onAndroidEvent;
+(function installModuleEventBindings() {
+  if (typeof EventBus === 'undefined') return;
 
-window.onAndroidEvent = function(type, data) {
-  if (typeof diag !== 'undefined') diag.onEvent(type, data);
-
-  if (type === "musicInfo") {
+  EventBus.on('musicInfo', (data) => {
     if (modules.player) modules.player.updateMusicInfo(data);
-  } else if (type === "climateState") {
+  });
+  EventBus.on('climateState', (data) => {
     if (modules.climate) modules.climate.updateState(data);
-  } else if (type === "carData") {
+  });
+  EventBus.on('carData', (data) => {
     if (modules.carData) modules.carData.updateFromEvent(data);
     if (modules.fuel) modules.fuel.updateFromEvent(data);
-  } else if (type === "volumeChanged") {
+  });
+  EventBus.on('volumeChanged', (data) => {
     if (modules.volume) modules.volume.handleVolumeFromSystem(data);
     if (modules.player) modules.player.handleVolumeFromSystem(data);
-  }
-  
-  if (originalOnAndroidEvent && typeof originalOnAndroidEvent === 'function') {
-    try { originalOnAndroidEvent(type, data); } catch (e) { /* noop */ }
-  }
-};
+  });
+})();
 
 function toggleWidgetsVisibility() {
   document.body.classList.toggle('widgets-hidden');
@@ -58,7 +66,12 @@ function isBackgroundElement(target) {
     '#widgetPlaceholder', '.dashboard',
     '.wm-overlay', '.wm-content', '.wm-picker-overlay', '.wm-picker-content',
     '#openWallpaperManager', '.sidebar-settings-accordion', '.settings-select', '.settings-text-input',
-    '.settings-server-row', '.settings-server-cb'
+    '.settings-server-row', '.settings-server-cb',
+    '.settings-header-link',
+    '.climate-temp-zone', '.climate-temp-carousel',
+    '#climate-temp-zone-left', '#climate-temp-zone-right', '#climate-temp-carousel',
+    '#speedtest-overlay', '.volume-indicator', '.volume-hint',
+    '.onboarding-overlay', '.onboarding-content'
   ];
   for (const selector of excludeSelectors) {
     if (target.closest && target.closest(selector)) return false;
@@ -74,9 +87,13 @@ let lastTapY = 0;
 const DOUBLE_TAP_WINDOW_MS = 300;
 const DOUBLE_TAP_DISTANCE_PX = 40;
 
+/* Общий флаг, чтобы long-press не превратился в двойной тап. */
+let bgLongPressTriggered = false;
+
 function handleTouchStart(e) {
   const doubleTapEnabled = storage.load('setting_doubleTapToHideWidgets');
   if (!doubleTapEnabled) return;
+  if (bgLongPressTriggered) return;
   if (!isBackgroundElement(e.target)) return;
   if (!e.touches || e.touches.length !== 1) return;
 
@@ -120,50 +137,113 @@ function cleanupIntervals() {
   if (modules.carData && modules.carData.stopAutoUpdate) modules.carData.stopAutoUpdate();
   if (modules.network && modules.network.stopAutoCheck) modules.network.stopAutoCheck();
   if (modules.climate && modules.climate.destroy) modules.climate.destroy();
+  if (modules.climateTemp && modules.climateTemp.destroy) modules.climateTemp.destroy();
   if (modules.fuel && modules.fuel.destroy) modules.fuel.destroy();
   if (modules.player && modules.player.destroy) modules.player.destroy();
   if (modules.navigation && modules.navigation.destroy) modules.navigation.destroy();
+  if (modules.widgetsReorder && modules.widgetsReorder.destroy) modules.widgetsReorder.destroy();
 }
 window.addEventListener('beforeunload', cleanupIntervals);
 
 window.rebuildSidebarGrid = async function() {
   const grid = document.querySelector('.wallpaper-grid');
   if (!grid) return;
+  if (!modules.wallpaper || typeof modules.wallpaper.getStaticList !== 'function') return;
   const list = modules.wallpaper.getStaticList();
   grid.innerHTML = '';
-  
+
   for (let i = 0; i < list.length; i++) {
     const item = list[i];
     const div = document.createElement('div');
     div.className = 'wallpaper-item';
-    
+
     let src = item.src;
     if (!item.isBuiltin) {
-      src = await modules.wallpaper.resolveStaticSrc(item);
+      try { src = await modules.wallpaper.resolveStaticSrc(item); } catch (e) { src = null; }
     }
-    
+
     if (src) {
       const img = document.createElement('img');
       img.src = src;
       img.alt = item.name;
       div.appendChild(img);
       div.setAttribute('data-id', item.id);
-      
+
       div.addEventListener('click', (e) => {
         e.stopPropagation();
         if (modules.wallpaper && modules.wallpaper.setCustomByIndex) {
            modules.wallpaper.setCustomByIndex(i);
         }
-        document.getElementById('sidebar')?.classList.remove('open');
+        closeSidebar();
       });
     }
     grid.appendChild(div);
   }
 };
 
-// Перепривязка ripple-эффекта на динамически созданные слоты
 function refreshOemFeedbackOnSlots() {
   attachOemTouchFeedback('.widget_buttons, .widget_player__btn, .close-btn, .drawer-close, .climate-off-all, .app_slot, .climate_slot, .settings-toggle, .settings-close-btn, .settings-reset-btn, .custom-wallpaper-btn, .accordion-header');
+}
+
+function forceResetSwipe() {
+  if (modules.volumeSwipe && typeof modules.volumeSwipe.resetSwipeState === 'function') {
+    modules.volumeSwipe.resetSwipeState();
+  }
+}
+
+// Универсальная функция закрытия сайдбара
+function closeSidebar() {
+  const sidebar = document.getElementById("sidebar");
+  const sidebarOverlay = document.getElementById("sidebarOverlay");
+  sidebar?.classList.remove("open");
+  if (sidebarOverlay) sidebarOverlay.classList.remove("visible");
+  if (modules.sidebarSettings && typeof modules.sidebarSettings.collapse === 'function') {
+    modules.sidebarSettings.collapse();
+  }
+}
+
+let bgLongPressTimer = null;
+
+function handleBackgroundLongPressStart(e) {
+  if (!isBackgroundElement(e.target)) return;
+  if (document.body.classList.contains('off-mode')) return;
+  if (document.body.classList.contains('widgets-hidden')) return;
+  if (e.touches && e.touches.length !== 1) return;
+
+  bgLongPressTriggered = false;
+
+  // Сбрасываем таймер двойного тапа, чтобы long-press не считался первым тапом.
+  lastTapTime = 0;
+
+  bgLongPressTimer = setTimeout(() => {
+    bgLongPressTriggered = true;
+    // Сбрасываем таймер двойного тапа после long-press
+    lastTapTime = 0;
+    forceResetSwipe();
+    if (navigator.vibrate) {
+      try { navigator.vibrate(20); } catch (err) {}
+    }
+    const shouldSave = confirm('Сохранить текущие обои в «Ваши обои»?');
+    forceResetSwipe();
+    if (shouldSave) {
+      if (modules.wallpaper && typeof modules.wallpaper.saveCurrentAsUserWallpaper === 'function') {
+        modules.wallpaper.saveCurrentAsUserWallpaper();
+      }
+    }
+    // Сбрасываем флаг через короткую задержку — чтобы клик после отпускания не сработал
+    setTimeout(() => { bgLongPressTriggered = false; }, 100);
+  }, 700);
+}
+
+function handleBackgroundLongPressEnd(e) {
+  if (bgLongPressTimer) {
+    clearTimeout(bgLongPressTimer);
+    bgLongPressTimer = null;
+  }
+  if (bgLongPressTriggered && e && e.cancelable) {
+    e.preventDefault();
+  }
+  forceResetSwipe();
 }
 
 async function initUI() {
@@ -193,6 +273,15 @@ async function initUI() {
   if (modules.volumeSwipe) modules.volumeSwipe.init();
   if (modules.navigation) modules.navigation.init();
   if (modules.wallpaperManager) modules.wallpaperManager.init();
+  if (modules.climateTemp) modules.climateTemp.init();
+  if (modules.widgetsReorder) modules.widgetsReorder.init();
+
+  // Инициализация онбординга с задержкой (чтобы панель успела отрисоваться)
+  if (modules.onboarding) {
+    setTimeout(() => {
+      modules.onboarding.init();
+    }, 1000);
+  }
 
   const btnWallpaper = document.getElementById("btnWallpaper");
   if (btnWallpaper) {
@@ -221,12 +310,16 @@ async function initUI() {
   document.body.addEventListener("click", (e) => {
     if (modules.weather) modules.weather.fetchWeather();
 
+    if (bgLongPressTriggered) return;
+
     if (document.body.classList.contains('off-mode')) {
       const exclude = [
         '.settings-modal-overlay', '.settings-modal-content',
         '.modal-overlay', '.modal-content', '.picker-drawer',
         '#sidebar', '#btnNetwork', '#diagOverlay', '#widgetWeather', '#widgetNavigation',
-        '.wm-overlay', '.wm-content', '.wm-picker-overlay', '.wm-picker-content'
+        '.wm-overlay', '.wm-content', '.wm-picker-overlay', '.wm-picker-content',
+        '.climate-temp-zone', '.climate-temp-carousel',
+        '.onboarding-overlay', '.onboarding-content'
       ];
       for (const selector of exclude) {
         if (e.target.closest(selector)) return;
@@ -237,11 +330,11 @@ async function initUI() {
       }
       return;
     }
-    
+
     const tapToChangeEnabled = storage.load('setting_tapToChangeWallpaper');
     if (tapToChangeEnabled === false) return;
     if (!isBackgroundElement(e.target)) return;
-    
+
     if (document.body.classList.contains('widgets-hidden')) {
        toggleWidgetsVisibility();
        return;
@@ -256,28 +349,44 @@ async function initUI() {
 
   document.body.addEventListener("touchstart", handleTouchStart, { passive: false });
 
-  const sidebar = document.getElementById("sidebar");
+  document.body.addEventListener("touchstart", handleBackgroundLongPressStart, { passive: true });
+  document.body.addEventListener("touchend", handleBackgroundLongPressEnd);
+  document.body.addEventListener("touchcancel", handleBackgroundLongPressEnd);
+  document.body.addEventListener("touchmove", handleBackgroundLongPressEnd, { passive: true });
+  document.body.addEventListener("mousedown", handleBackgroundLongPressStart);
+  document.body.addEventListener("mouseup", handleBackgroundLongPressEnd);
+  document.body.addEventListener("mouseleave", handleBackgroundLongPressEnd);
+
+  window.addEventListener('blur', forceResetSwipe);
+  window.addEventListener('focus', forceResetSwipe);
+
   document.getElementById("openSidebar")?.addEventListener("click", (e) => {
     e.stopPropagation();
+    const sidebar = document.getElementById("sidebar");
+    const sidebarOverlay = document.getElementById("sidebarOverlay");
     sidebar?.classList.add("open");
-    
-    // [NEW] Сайдбар-настройки теперь в отдельном модуле
+    if (sidebarOverlay) sidebarOverlay.classList.add("visible");
+
     if (modules.sidebarSettings && typeof modules.sidebarSettings.render === 'function') {
       modules.sidebarSettings.render();
     }
   });
-  
+
   document.getElementById("closeSidebar")?.addEventListener("click", (e) => {
     e.stopPropagation();
-    sidebar?.classList.remove("open");
+    closeSidebar();
+  });
+
+  document.getElementById("sidebarOverlay")?.addEventListener("click", () => {
+    closeSidebar();
   });
 
   document.getElementById('presetVideoKamin')?.addEventListener('click', (e) => {
     e.stopPropagation();
     if (modules.wallpaper && modules.wallpaper.setVideoBackground) {
-      modules.wallpaper.setVideoBackground('images/kaminHD.mp4');
+      modules.wallpaper.setVideoBackground({ preset: 'kamin' });
     }
-    sidebar?.classList.remove('open');
+    closeSidebar();
   });
 
   document.addEventListener("visibilitychange", () => {
@@ -294,7 +403,6 @@ async function initUI() {
 
   refreshOemFeedbackOnSlots();
 
-  // Перепривязка ripple после изменения количества слотов
   window.addEventListener('storage', (e) => {
     if (e.key === 'appsSlotsCount' || e.key === 'climateSlotsCount') {
       setTimeout(refreshOemFeedbackOnSlots, 100);
@@ -302,10 +410,13 @@ async function initUI() {
   });
 
   document.addEventListener("contextmenu", e => e.preventDefault());
-  if (typeof android.onJsReady === 'function') android.onJsReady();
 
-  // После готовности моста — принудительно применяем тему мини-карты.
-  // Это гарантирует, что setMiniMapTheme уйдёт уже в готовый Android.
+  // Сообщаем Android о готовности и принудительно применяем тему мини-карты
+  try {
+    if (typeof android.onJsReady === 'function') android.onJsReady();
+    else if (typeof android.call === 'function') android.call('onJsReady');
+  } catch (e) { /* noop */ }
+
   setTimeout(() => {
     if (modules.navigation && typeof modules.navigation.applyThemeNow === 'function') {
       modules.navigation.applyThemeNow();

@@ -14,6 +14,8 @@
 <link rel="stylesheet" href="css/custom.css">
 <link rel="stylesheet" href="css/settings.css">
 <link rel="stylesheet" href="css/volume-swipe.css">
+<link rel="stylesheet" href="css/climate-temp.css">
+<link rel="stylesheet" href="css/onboarding.css">
 <style>
   html, body { overscroll-behavior: none; }
   #app-content { opacity: 0; visibility: hidden; transition: opacity 0.3s ease, visibility 0.3s ease; }
@@ -35,6 +37,26 @@
 
   .widget-wrapper { display: flex; flex-shrink: 0; }
   .widget-wrapper.widget-hidden { display: none !important; }
+
+  /* Стили для drag-and-drop перестановки виджетов */
+  .widget-dragging {
+    opacity: 0.85;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.4), 0 0 0 2px rgba(100,150,255,0.4) !important;
+    cursor: grabbing !important;
+  }
+  .widget-drop-before {
+    box-shadow: -4px 0 0 0 rgba(100,150,255,0.9), 0 20px 40px rgba(0,0,0,0.4) !important;
+  }
+  .widget-drop-after {
+    box-shadow: 4px 0 0 0 rgba(100,150,255,0.9), 0 20px 40px rgba(0,0,0,0.4) !important;
+  }
+  .dashboard .widget,
+  .dashboard .right-buttons,
+  .dashboard .widget-wrapper {
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+  }
 </style>
 </head>
 <body>
@@ -45,6 +67,9 @@
   <div class="preloader-spinner"></div>
   <div class="preloader-text">ЗАГРУЗКА ПАНЕЛИ...</div>
 </div>
+
+<!-- Добавлена подложка для сайдбара -->
+<div id="sidebarOverlay" class="sidebar-overlay"></div>
 
 <div id="app-content">
   <div class="modal-overlay" id="brandEditorModal">
@@ -69,10 +94,8 @@
       </button>
     </div>
 
-    <!-- Контейнер для настроек автосмены (генерируется из JS) -->
     <div id="wallpaperAutoSettings"></div>
     
-    <!-- Кнопки управления -->
     <div class="custom-wallpaper-section">
       <div class="custom-wallpaper-btn" id="presetVideoKamin">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
@@ -101,7 +124,7 @@
   </div>
 
   <div class="dashboard">
-    <div class="widget_climate widget widget_climate_2x3">
+    <div class="widget_climate widget widget_climate_2x3" data-widget-id="climate">
       <div class="climate-grid climate-grid_2x3">
         <div class="climate_slot" data-climate-slot="1"></div>
         <div class="climate_slot" data-climate-slot="2"></div>
@@ -115,7 +138,7 @@
       </div>
     </div>
 
-    <div class="widget_time widget">
+    <div class="widget_time widget" data-widget-id="time">
       <div class="widget_time__weather-top" id="timeWeatherTop"></div>
       <div class="flip-clock" id="flipClock"></div>
       <div class="widget_time__date" id="dateDisplay"></div>
@@ -124,7 +147,7 @@
       <div class="widget_time__signature">@Strelets27</div>
     </div>
 
-    <div id="networkWidgetWrapper" class="widget-wrapper">
+    <div id="networkWidgetWrapper" class="widget-wrapper" data-widget-id="network">
       <div class="widget_placeholder widget" id="widgetPlaceholder">
         <div class="widget_placeholder__top">
           <div id="btnNetwork" title="Статус подключения" aria-label="Статус подключения">
@@ -142,7 +165,7 @@
       </div>
     </div>
 
-    <div class="widget_player widget">
+    <div class="widget_player widget" data-widget-id="player">
       <div class="widget_player__right">
         <div class="widget_player__top">
           <div class="widget_player__titles">
@@ -182,24 +205,24 @@
       </div>
     </div>
 
-    <div class="widget_apps widget" data-count="4">
+    <div class="widget_apps widget" data-count="4" data-widget-id="apps">
       <div class="app_slot" data-slot="1"></div>
       <div class="app_slot" data-slot="2"></div>
       <div class="app_slot" data-slot="3"></div>
       <div class="app_slot" data-slot="4"></div>
     </div>
 
-    <div class="widget_weather widget" id="widgetWeather">
+    <div class="widget_weather widget" id="widgetWeather" data-widget-id="weather">
       <div class="weather-content" id="widgetWeatherContent">
         <div class="weather-temp" style="font-size:0.8rem;opacity:0.5;">Загрузка...</div>
       </div>
     </div>
 
-    <div class="widget_navigation widget widget-hidden" id="widgetNavigation">
+    <div class="widget_navigation widget widget-hidden" id="widgetNavigation" data-widget-id="navigation">
       <img class="nav-minimap-img" id="navMinimapImg" alt="Мини-карта">
     </div>
 
-    <div class="right-buttons" aria-label="Быстрые действия">
+    <div class="right-buttons" aria-label="Быстрые действия" data-widget-id="buttons">
       <div id="btnWallpaper" class="widget_buttons" title="Автосмена обоев">
         <span class="right-button__halo" aria-hidden="true"></span>
         <svg class="right-button__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -261,6 +284,7 @@
 <script src="js/volume.js"></script>
 <script src="js/player.js"></script>
 <script src="js/climate.js"></script>
+<script src="js/climate-temp.js"></script>
 <script src="js/apps.js"></script>
 <script src="js/carData.js"></script>
 <script src="js/fuel.js"></script>
@@ -269,6 +293,8 @@
 <script src="js/settings.js"></script>
 <script src="js/sidebar-settings.js"></script>
 <script src="js/volume-swipe.js"></script>
+<script src="js/widgets-reorder.js"></script>
+<script src="js/onboarding.js"></script>
 <script src="js/diag.js"></script>
 <script src="js/main.js"></script>
 </body>

@@ -1,15 +1,23 @@
 /**********************************************
  * Модуль: Обои (статические, авто, видео)
- * [FIX] Поддержка пользовательского сервера (user_custom).
- * [FIX] Откат индекса при неудаче.
- * [FIX] Убран стандартный сервер Яндекса из дефолтных.
- * [NEW] Добавлены серверы: Любовь, Легкий стиль, Милые животные, Динамичные.
+ * [FIX] Ключи интервалов автосмены читаются/пишутся через storage (без префикса).
+ * [NEW] Функция сохранения текущих обоев в список пользовательских.
  **********************************************/
 
 modules.wallpaper = (function() {
   const IDB_CUSTOM_WALLPAPERS_KEY = 'wallpaper_custom_list';
   const IDB_CUSTOM_WALLPAPER_DATA_PREFIX = 'wallpaper_custom_data_';
   const HIDDEN_BUILTINS_KEY = 'wallpaper_hidden_builtins';
+
+  const STORAGE_KEY_WALLPAPER_MODE = 'wallpaperMode';
+  const STORAGE_KEY_VIDEO_SOURCE = 'wallpaperVideoSource';
+  const STORAGE_KEY_VIDEO_PRESET = 'wallpaperVideoPreset';
+  const STORAGE_KEY_AUTO_INTERVAL = 'autoWallpaperInterval';
+  const STORAGE_KEY_BUILTIN_INTERVAL = 'builtinWallpaperInterval';
+
+  const VIDEO_PRESET_PREFIX = 'preset:';
+  const PRESET_KAMIN = 'preset:kamin';
+  const PRESET_KAMIN_SRC = 'images/kaminHD.mp4';
 
   const builtinWallpapersMeta = Array.from(document.querySelectorAll('.wallpaper-item')).map((item, idx) => ({
     id: `builtin_${idx}`,
@@ -18,7 +26,7 @@ modules.wallpaper = (function() {
     isBuiltin: true
   }));
 
-  let staticWallpapers = []; 
+  let staticWallpapers = [];
   let customWallpaperIndex = 0;
   const MAX_CACHE_SIZE = 10;
   const MAX_CACHE_BYTES = 24 * 1024 * 1024;
@@ -26,7 +34,6 @@ modules.wallpaper = (function() {
   const IDB_CURRENT_KEY = 'wallpaper_current';
   const CACHE_INDEX_KEY = 'wallpaper_cache_index';
 
-  // Кастомные серверы
   const FIXED_PEIZAZHI_URL = 'https://bingw.jasonzeng.dev/?resolution=1920x1080&index=random';
   const FIXED_CARS_URL = 'https://api.icofun.cn/API/360bz.php?n=10&type=image';
   const FIXED_LOVE_URL = 'https://api.icofun.cn/API/360bz.php?n=3&type=image';
@@ -34,7 +41,6 @@ modules.wallpaper = (function() {
   const FIXED_ANIMALS_URL = 'https://api.icofun.cn/API/360bz.php?n=8&type=image';
   const FIXED_DYNAMIC_URL = 'https://api.icofun.cn/API/360bz.php?n=13&type=image';
 
-  // Резервные (если пользователь их выберет)
   const IMAGE_SOURCES = [
     { name: 'LoremFlickr CN (Россия)', id: 'loremflickrcn', url: (w, h) => `https://loremflickrcn.com/${w}/${h}/landscape?random&lock=${Date.now()}` },
     { name: 'Picsum Proxy (Россия)', id: 'picsum_proxy', url: (w, h) => `https://jcartools.ru/run/picsum_proxy.php?${w}/${h}&t=${Date.now()}` },
@@ -143,7 +149,7 @@ modules.wallpaper = (function() {
     const custom5 = isCustomEnabled('wallpaperCustomServer5') ? getCustomServerSource('wallpaperCustomServer5', 'Милые животные') : null;
     const custom6 = isCustomEnabled('wallpaperCustomServer6') ? getCustomServerSource('wallpaperCustomServer6', 'Динамичные') : null;
     const customUser = getCustomServerSourceUser();
-    
+
     let built = [];
 
     if (custom1)  built.push(custom1);
@@ -351,7 +357,7 @@ modules.wallpaper = (function() {
   }
 
   async function preloadNextWallpaper() {
-    if (storage.load('wallpaperMode') !== 'auto') return;
+    if (storage.load(STORAGE_KEY_WALLPAPER_MODE) !== 'auto') return;
     if (preloadAbortController) {
       try { preloadAbortController.abort(); } catch (e) {}
     }
@@ -378,7 +384,7 @@ modules.wallpaper = (function() {
     clearVideoBackground();
     document.body.style.backgroundImage = `url("${base64}")`;
     document.body.classList.remove('off-mode');
-    storage.save('wallpaperMode', 'auto');
+    storage.save(STORAGE_KEY_WALLPAPER_MODE, 'auto');
     await idbStore.set(IDB_CURRENT_KEY, base64);
   }
 
@@ -399,15 +405,33 @@ modules.wallpaper = (function() {
     document.body.classList.remove('has-video-background');
   }
 
-  function setVideoBackground(fileOrUrl) {
+  function setVideoBackground(source) {
     let url;
     let createdObjectUrl = false;
-    if (typeof fileOrUrl === 'string') {
-      url = fileOrUrl;
-    } else {
-      url = URL.createObjectURL(fileOrUrl);
+    let persistentSource = null;
+
+    if (source && typeof source === 'object' && source.preset) {
+      if (source.preset === 'kamin') {
+        url = PRESET_KAMIN_SRC;
+        persistentSource = PRESET_KAMIN;
+      } else {
+        url = '';
+      }
+    } else if (source && typeof source === 'object' && source.file instanceof Blob) {
+      url = URL.createObjectURL(source.file);
       createdObjectUrl = true;
+      persistentSource = null;
+    } else if (typeof source === 'string') {
+      url = source;
+      if (/^https?:\/\//i.test(source) || /^images\//i.test(source) || /^\.?\//.test(source)) {
+        persistentSource = source;
+      }
+    } else {
+      url = '';
     }
+
+    if (!url) return;
+
     clearVideoBackground();
     stopAutoTimer();
     stopBuiltinAutoTimer();
@@ -448,15 +472,21 @@ modules.wallpaper = (function() {
     document.body.style.backgroundImage = 'none';
     document.body.classList.add('has-video-background');
     document.body.classList.remove('off-mode');
-    storage.save('wallpaperMode', 'video');
-    storage.save('wallpaperVideo', url);
+    storage.save(STORAGE_KEY_WALLPAPER_MODE, 'video');
+    if (persistentSource) {
+      storage.save(STORAGE_KEY_VIDEO_SOURCE, persistentSource);
+      storage.save(STORAGE_KEY_VIDEO_PRESET, persistentSource === PRESET_KAMIN ? 'kamin' : null);
+    } else {
+      storage.remove(STORAGE_KEY_VIDEO_SOURCE);
+      storage.remove(STORAGE_KEY_VIDEO_PRESET);
+    }
   }
 
   function isVideoMode() { return isVideoModeActive; }
 
   function startAutoTimer() {
     stopAutoTimer();
-    const intervalText = storage.load('autoWallpaperInterval') || '5 минут';
+    const intervalText = storage.load(STORAGE_KEY_AUTO_INTERVAL) || '5 минут';
     if (intervalText === 'Никогда') return;
 
     let intervalMs = 300000;
@@ -471,7 +501,7 @@ modules.wallpaper = (function() {
     }
     if (intervalMs <= 0) return;
     autoTimer = setInterval(() => {
-      if (storage.load('wallpaperMode') === 'auto') setAuto(false);
+      if (storage.load(STORAGE_KEY_WALLPAPER_MODE) === 'auto') setAuto(false);
     }, intervalMs);
   }
 
@@ -481,7 +511,7 @@ modules.wallpaper = (function() {
 
   function startBuiltinAutoTimer() {
     stopBuiltinAutoTimer();
-    const intervalText = storage.load('builtinWallpaperInterval') || 'Никогда';
+    const intervalText = storage.load(STORAGE_KEY_BUILTIN_INTERVAL) || 'Никогда';
     if (intervalText === 'Никогда') return;
 
     let intervalMs = 300000;
@@ -496,7 +526,7 @@ modules.wallpaper = (function() {
     }
     if (intervalMs <= 0) return;
     builtinAutoTimer = setInterval(() => {
-      if (storage.load('wallpaperMode') === 'custom') nextCustom();
+      if (storage.load(STORAGE_KEY_WALLPAPER_MODE) === 'custom') nextCustom();
     }, intervalMs);
   }
 
@@ -507,7 +537,7 @@ modules.wallpaper = (function() {
   function syncButtonState(success) {
     const btn = document.getElementById('btnWallpaper');
     if (!btn) return;
-    const isAuto = storage.load('wallpaperMode') === 'auto';
+    const isAuto = storage.load(STORAGE_KEY_WALLPAPER_MODE) === 'auto';
     btn.classList.toggle('active', isAuto && success);
   }
 
@@ -598,7 +628,7 @@ modules.wallpaper = (function() {
 
   function updateOffModeWidgetVisibility() {
     if (!document.body.classList.contains('off-mode')) return;
-    
+
     const hideClimate = storage.load('setting_offModeHideClimate') !== false;
     const hideApps = storage.load('setting_offModeHideApps') !== false;
     const hidePlayer = storage.load('setting_offModeHidePlayer') !== false;
@@ -610,21 +640,13 @@ modules.wallpaper = (function() {
     const appsWidget = document.querySelector('.widget_apps');
     const playerWidget = document.querySelector('.widget_player');
     const networkWrapper = document.getElementById('networkWidgetWrapper');
-    const networkBtn = document.getElementById('btnNetwork'); 
     const miniMapWidget = document.getElementById('widgetNavigation');
     const rightButtons = document.querySelector('.right-buttons');
 
     if (climateWidget) climateWidget.classList.toggle('off-mode-hidden', hideClimate);
     if (appsWidget) appsWidget.classList.toggle('off-mode-hidden', hideApps);
     if (playerWidget) playerWidget.classList.toggle('off-mode-hidden', hidePlayer);
-    
-    if (networkWrapper) {
-      networkWrapper.classList.toggle('off-mode-hidden', hideNetwork);
-      if (networkBtn) {
-        networkBtn.style.display = hideNetwork ? 'none' : 'flex';
-      }
-    }
-    
+    if (networkWrapper) networkWrapper.classList.toggle('off-mode-hidden', hideNetwork);
     if (miniMapWidget) miniMapWidget.classList.toggle('off-mode-hidden', hideMiniMap);
     if (rightButtons) rightButtons.classList.toggle('off-mode-hidden', hideRightButtons);
   }
@@ -669,14 +691,13 @@ modules.wallpaper = (function() {
 
   function exitOffMode() {
     if (!document.body.classList.contains('off-mode')) return;
-    const savedMode = storage.load('wallpaperMode') || 'custom';
+    const savedMode = storage.load(STORAGE_KEY_WALLPAPER_MODE) || 'custom';
     if (savedMode === 'auto') setAuto(false);
     else if (savedMode === 'custom') {
       const idx = storage.load('customWallpaperIndex') || 0;
       setCustomByIndex(idx);
     } else if (savedMode === 'video') {
-      const url = storage.load('wallpaperVideo');
-      if (url) setVideoBackground(url);
+      restoreVideoFromStorage();
     } else setCustomByIndex(0);
 
     document.body.classList.remove('off-mode');
@@ -686,16 +707,8 @@ modules.wallpaper = (function() {
     const hint = document.querySelector('.off-mode-hint');
     if (hint) hint.remove();
 
-    const networkWrapper = document.getElementById('networkWidgetWrapper');
-    const networkBtn = document.getElementById('btnNetwork');
-    if (networkWrapper) {
-      networkWrapper.classList.remove('widget-hidden');
-      networkWrapper.classList.remove('off-mode-hidden');
-    }
-    if (networkBtn) {
-      networkBtn.classList.remove('widget-hidden');
-      networkBtn.style.display = 'flex';
-    }
+    document.querySelectorAll('.widget_climate, .widget_apps, .widget_player, .right-buttons, #networkWidgetWrapper, #widgetNavigation')
+      .forEach(w => w.classList.remove('off-mode-hidden'));
 
     const tw = document.querySelector('.widget_time');
     if (tw) {
@@ -717,9 +730,24 @@ modules.wallpaper = (function() {
         }
       }, 1500);
     }
+  }
 
-    document.querySelectorAll('.widget_climate, .widget_apps, .widget_player, .right-buttons, #networkWidgetWrapper, #widgetNavigation')
-      .forEach(w => w.classList.remove('off-mode-hidden'));
+  function restoreVideoFromStorage() {
+    const preset = storage.load(STORAGE_KEY_VIDEO_PRESET);
+    if (preset === 'kamin') {
+      setVideoBackground({ preset: 'kamin' });
+      return true;
+    }
+    const source = storage.load(STORAGE_KEY_VIDEO_SOURCE);
+    if (typeof source === 'string' && source && !/^blob:/i.test(source)) {
+      setVideoBackground(source);
+      return true;
+    }
+    storage.remove(STORAGE_KEY_VIDEO_SOURCE);
+    storage.remove(STORAGE_KEY_VIDEO_PRESET);
+    storage.save(STORAGE_KEY_WALLPAPER_MODE, 'custom');
+    setCustomByIndex(0);
+    return false;
   }
 
   async function resolveStaticSrc(item) {
@@ -746,21 +774,21 @@ modules.wallpaper = (function() {
       }
       return;
     }
-    
+
     customWallpaperIndex = safeIndex;
     document.body.style.backgroundImage = `url("${src}")`;
     document.body.classList.remove('off-mode', 'has-video-background');
-    storage.save('wallpaperMode', 'custom');
+    storage.save(STORAGE_KEY_WALLPAPER_MODE, 'custom');
     storage.save('wallpaperCustom', src);
     storage.save('wallpaperCustomId', item.id);
     storage.save('customWallpaperIndex', safeIndex);
     syncButtonState(false);
-    
+
     if (restartTimer) startBuiltinAutoTimer();
   }
 
   function nextCustom() {
-    if (storage.load('wallpaperMode') !== 'custom') return;
+    if (storage.load(STORAGE_KEY_WALLPAPER_MODE) !== 'custom') return;
     let idx = storage.load('customWallpaperIndex');
     if (idx === null || idx === undefined) idx = customWallpaperIndex;
     if (idx === null || idx === undefined) idx = 0;
@@ -804,10 +832,10 @@ modules.wallpaper = (function() {
       storage.remove('wallpaper_cache');
     }
 
-    let mode = storage.load('wallpaperMode');
+    let mode = storage.load(STORAGE_KEY_WALLPAPER_MODE);
     if (!mode) {
       mode = 'custom';
-      storage.save('wallpaperMode', 'custom');
+      storage.save(STORAGE_KEY_WALLPAPER_MODE, 'custom');
     }
     updateServers(storage.load('wallpaperServers'));
 
@@ -839,9 +867,11 @@ modules.wallpaper = (function() {
       clearVideoBackground();
       stopAutoTimer();
       stopBuiltinAutoTimer();
-      const savedVideo = storage.load('wallpaperVideo');
-      if (savedVideo) setVideoBackground(savedVideo);
-      else await setCustomByIndex(0);
+      const restored = restoreVideoFromStorage();
+      if (!restored) {
+        document.body.classList.remove('has-video-background');
+        await setCustomByIndex(0, true);
+      }
     } else {
       await setCustomByIndex(0, true);
     }
@@ -857,7 +887,7 @@ modules.wallpaper = (function() {
   }
 
   async function toggleAutoMode() {
-    const currentMode = storage.load('wallpaperMode') || 'custom';
+    const currentMode = storage.load(STORAGE_KEY_WALLPAPER_MODE) || 'custom';
     const btn = document.getElementById('btnWallpaper');
 
     if (currentMode === 'auto') {
@@ -876,22 +906,40 @@ modules.wallpaper = (function() {
 
   function initAutoMode() {
     updateServers(storage.load('wallpaperServers'));
-    if (storage.load('wallpaperMode') === 'auto') {
+    if (storage.load(STORAGE_KEY_WALLPAPER_MODE) === 'auto') {
       startAutoTimer();
       preloadNextWallpaper();
     }
-    if (storage.load('wallpaperMode') === 'custom') {
+    if (storage.load(STORAGE_KEY_WALLPAPER_MODE) === 'custom') {
       startBuiltinAutoTimer();
     }
     syncButtonState(true);
   }
 
   function restartAutoMode() {
-    if (storage.load('wallpaperMode') === 'auto') {
+    if (storage.load(STORAGE_KEY_WALLPAPER_MODE) === 'auto') {
       stopAutoTimer();
       startAutoTimer();
-      const intervalText = storage.load('autoWallpaperInterval');
+      const intervalText = storage.load(STORAGE_KEY_AUTO_INTERVAL);
       if (intervalText !== 'Никогда') setAuto(false);
+    }
+  }
+
+  // Публичный метод для сохранения интервала из сайдбара
+  function setIntervalSetting(key, value) {
+    if (key === 'auto') {
+      storage.save(STORAGE_KEY_AUTO_INTERVAL, value);
+      // Если режим auto — перезапускаем таймер с новым интервалом
+      if (storage.load(STORAGE_KEY_WALLPAPER_MODE) === 'auto') {
+        stopAutoTimer();
+        startAutoTimer();
+      }
+    } else if (key === 'builtin') {
+      storage.save(STORAGE_KEY_BUILTIN_INTERVAL, value);
+      if (storage.load(STORAGE_KEY_WALLPAPER_MODE) === 'custom') {
+        stopBuiltinAutoTimer();
+        startBuiltinAutoTimer();
+      }
     }
   }
 
@@ -934,6 +982,53 @@ modules.wallpaper = (function() {
     return Array.isArray(raw) ? raw : [];
   }
 
+  // --- Сохранение текущих обоев в пользовательские ---
+  async function saveCurrentAsUserWallpaper() {
+    try {
+      const bgImage = document.body.style.backgroundImage;
+      if (!bgImage || !bgImage.includes('url(')) {
+        if (typeof showToast === 'function') showToast('Нечего сохранять', 2000);
+        return false;
+      }
+      const match = bgImage.match(/url\("?(.+?)"?\)/);
+      if (!match) return false;
+      let src = match[1];
+
+      let base64 = src;
+      if (!src.startsWith('data:')) {
+        try {
+          const res = await fetch(src, { cache: 'no-store', mode: 'cors', credentials: 'omit' });
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          const blob = await res.blob();
+          base64 = await new Promise((resolve, reject) => {
+            const fr = new FileReader();
+            fr.onloadend = () => resolve(fr.result);
+            fr.onerror = () => reject(new Error('FileReader error'));
+            fr.readAsDataURL(blob);
+          });
+        } catch (e) {
+          if (typeof showToast === 'function') showToast('Не удалось скачать обои', 2500);
+          return false;
+        }
+      }
+
+      const name = 'Сохранённые ' + new Date().toLocaleString('ru-RU');
+      const meta = await saveUserWallpaperInternal(name, base64);
+      if (!meta) {
+        if (typeof showToast === 'function') showToast('Не удалось сохранить', 2500);
+        return false;
+      }
+      await rebuildStaticWallpapers();
+      if (typeof window.rebuildSidebarGrid === 'function') window.rebuildSidebarGrid();
+      if (typeof showToast === 'function') showToast('Обои сохранены в «Ваши обои»', 2000);
+      return true;
+    } catch (e) {
+      console.warn('[Wallpaper] saveCurrentAsUserWallpaper error:', e);
+      if (typeof showToast === 'function') showToast('Ошибка сохранения обоев', 2500);
+      return false;
+    }
+  }
+
   return {
     setOff, setAuto, setCustomByIndex, nextCustom, restore,
     toggleOffMode, toggleAutoMode, initAutoMode, setVideoBackground,
@@ -952,6 +1047,8 @@ modules.wallpaper = (function() {
     getHiddenBuiltins,
     resolveStaticSrc,
     restartBuiltinAutoTimer: startBuiltinAutoTimer,
+    saveCurrentAsUserWallpaper,
+    setIntervalSetting, // новый метод
     FIXED_PEIZAZHI_URL,
     FIXED_CARS_URL,
     FIXED_LOVE_URL,

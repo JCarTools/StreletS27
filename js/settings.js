@@ -1,7 +1,15 @@
 /**********************************************
  * Модуль: Настройки приборной панели (модалка)
- * Отвечает ТОЛЬКО за модальное окно настроек.
- * Настройки автосмены обоев в сайдбаре — см. sidebar-settings.js
+ * [FIX] Жесткая привязка клика по шестеренке.
+ * [NEW] Кнопка "Обновить" → системное меню JCarTools.
+ * [NEW] Добавлена настройка свайп-регулировки температуры.
+ * [NEW] Добавлена настройка прозрачности и размера шрифта температуры.
+ * [FIX] Настройка цвета иконок климата сохраняется и применяется при перезапуске.
+ * [FIX] performFullReset сбрасывает widgetOrder и onboarding_completed.
+ * [FIX] updateClimateSlotsCount защищён от отсутствия климат-сетки.
+ * [FIX] Поле "Автор" теперь отображает 'Александр Стрелец'.
+ * [NEW] Добавлена кнопка "Пройти обучение повторно" в настройки.
+ * [FIX] Перезапуск онбординга теперь работает корректно (с задержкой закрытия модалки).
  **********************************************/
 
 modules.settings = (function() {
@@ -10,6 +18,67 @@ modules.settings = (function() {
   let isApplyingSetting = false;
 
   console.log('[Settings] Модуль загружен');
+
+  const SETTINGS_MODAL_ID = 'settingsModal';
+  const SETTINGS_MODAL_CLASS = 'settings-modal-overlay';
+  const SETTINGS_CONTENT_CLASS = 'settings-modal-content';
+  const SETTINGS_HEADER_CLASS = 'settings-header';
+  const SETTINGS_HEADER_TITLE_CLASS = 'settings-header-title';
+  const SETTINGS_HEADER_LINK_CLASS = 'settings-header-link';
+  const SETTINGS_REFRESH_BTN_ID = 'settingsRefreshBtn';
+  const SETTINGS_CLOSE_BTN_ID = 'settingsCloseBtn';
+  const SETTINGS_BODY_CLASS = 'settings-body';
+  const SETTINGS_SECTION_CLASS = 'settings-section';
+  const SETTINGS_SECTION_TITLE_CLASS = 'settings-section-title';
+  const SETTINGS_ROW_CLASS = 'settings-row';
+  const SETTINGS_LABEL_CLASS = 'settings-label';
+  const SETTINGS_RANGE_CONTAINER_CLASS = 'settings-range-container';
+  const SETTINGS_RANGE_VALUE_CLASS = 'settings-range-value';
+  const SETTINGS_RANGE_CLASS = 'settings-range';
+  const SETTINGS_SELECT_CLASS = 'settings-select';
+  const SETTINGS_TOGGLE_CLASS = 'settings-toggle';
+  const SETTINGS_TEXT_INPUT_CLASS = 'settings-text-input';
+  const SETTINGS_INFO_CLASS = 'settings-info';
+  const SETTINGS_RESET_BTN_CLASS = 'settings-reset-btn';
+  const SETTINGS_CLOSE_BTN_CLASS = 'settings-close-btn';
+  const SETTINGS_QR_CONTAINER_CLASS = 'settings-qr-container';
+  const SETTINGS_QR_TEXT_CLASS = 'settings-qr-text';
+
+  const OPEN_CLASS = 'open';
+  const ACTIVE_CLASS = 'active';
+  const HIDDEN_CLASS = 'hidden';
+  const LIGHT_BODY_CLASS = 'light';
+  const WIDGET_HIDDEN_CLASS = 'widget-hidden';
+
+  const TEXT_HEADER_TITLE = '⚙️ Настройки панели';
+  const TEXT_REFRESH_BTN = 'Обновить';
+  const TEXT_REFRESH_TITLE = 'Открыть системное меню JCarTools';
+  const TEXT_CLOSE_ARIA = 'Закрыть';
+  const TEXT_RESET_BTN = '🔄 Сбросить все настройки';
+  const TEXT_RESET_CONFIRM = 'Сбросить все настройки панели? Это перезагрузит страницу.';
+  const TEXT_QR_ALT = 'QR-код для поддержки автора';
+  const TEXT_QR_MAIN = '✨ Отсканируйте QR-код, чтобы поддержать автора ✨';
+  const TEXT_QR_HINT = '✨ Если Вам нравится моя работа,<br>подтвердите это переходом по QR ✨';
+  const TEXT_SYS_SETTINGS_UNAVAILABLE = 'Системные настройки недоступны';
+  const TEXT_TOGGLE_ON = 'Вкл';
+  const TEXT_TOGGLE_OFF = 'Выкл';
+  const TEXT_VERSION_FALLBACK = '—';
+
+  const STORAGE_PREFIX = 'setting_';
+  const TOAST_DURATION_SHORT = 2000;
+  const MODAL_ANIMATION_MS = 300;
+  const RESIZE_DEBOUNCE_MS = 200;
+  const OPEN_DELAY_MS = 10;
+  const QR_OVERLAY_ANIM_MS = 300;
+  const QR_OVERLAY_SHOW_DELAY_MS = 10;
+
+  const QR_IMAGE_SRC = 'images/Qrkod.png';
+  const QR_MODAL_STYLE_ID = 'qr-modal-styles';
+  const QR_OVERLAY_CLASS = 'qr-expanded-overlay';
+  const QR_CONTENT_CLASS = 'qr-expanded-content';
+  const QR_IMAGE_CLASS = 'qr-expanded-img';
+  const QR_TEXT_CLASS = 'qr-expanded-text';
+  const QR_OVERLAY_ACTIVE_CLASS = 'active';
 
   const settingsConfig = {
     widgets: {
@@ -24,7 +93,8 @@ modules.settings = (function() {
         { id: 'miniMapTheme', type: 'select', label: 'Тема мини-карты', options: ['День', 'Ночь', 'Авто'], default: 'Ночь' },
         { id: 'widgetSize', type: 'range', label: 'Размер виджетов', min: 9, max: 20, step: 0.5, default: 13.5, unit: 'rem' },
         { id: 'widgetOpacity', type: 'range', label: 'Прозрачность виджетов и кнопок', min: 0.3, max: 1, step: 0.01, default: 1, unit: '' },
-        { id: 'widgetBlur', type: 'range', label: 'Размытие фона', min: 0, max: 20, step: 1, default: 10, unit: 'px' }
+        { id: 'widgetBlur', type: 'range', label: 'Размытие фона', min: 0, max: 20, step: 1, default: 10, unit: 'px' },
+        { id: 'widgetBottomMargin', type: 'range', label: 'Отступ виджетов снизу', min: 0, max: 5, step: 0.1, default: 0.5, unit: 'rem' }
       ]
     },
     climate: {
@@ -32,7 +102,10 @@ modules.settings = (function() {
       settings: [
         { id: 'climateOffButton', type: 'toggle', label: 'Кнопка выключения всех устройств', default: true },
         { id: 'climateSlotsCount', type: 'select', label: 'Количество кнопок устройств', options: ['4', '6', '8'], default: '6' },
-        { id: 'climateIconColor', type: 'select', label: 'Цвет иконок в кнопках', options: ['Белый', 'Черный'], default: 'Белый' }
+        { id: 'climateIconColor', type: 'select', label: 'Цвет иконок в кнопках', options: ['Белый', 'Черный'], default: 'Белый' },
+        { id: 'showClimateTemp', type: 'toggle', label: 'Свайп-регулировка температуры', default: true },
+        { id: 'climateTempOpacity', type: 'range', label: 'Прозрачность цифр температуры', min: 0.1, max: 1, step: 0.05, default: 0.4, unit: '' },
+        { id: 'climateTempFontSize', type: 'range', label: 'Размер шрифта температуры', min: 4, max: 14, step: 0.5, default: 8, unit: 'rem' }
       ]
     },
     fuel: {
@@ -70,7 +143,8 @@ modules.settings = (function() {
       title: 'Поведение',
       settings: [
         { id: 'tapToChangeWallpaper', type: 'toggle', label: 'Тап по фону → смена обоев', default: true },
-        { id: 'doubleTapToHideWidgets', type: 'toggle', label: 'Двойной тап по фону → скрыть виджеты', default: false }
+        { id: 'doubleTapToHideWidgets', type: 'toggle', label: 'Двойной тап по фону → скрыть виджеты', default: false },
+        { id: 'onboardingReset', type: 'button', label: '🎓 Пройти обучение повторно', value: 'Запустить' }
       ]
     },
     offMode: {
@@ -88,17 +162,24 @@ modules.settings = (function() {
       title: 'О панели',
       settings: [
         { id: 'version', type: 'info', label: 'Версия', value: '' },
-        { id: 'author', type: 'info', label: 'Автор', value: '@Strelets27' },
+        { id: 'author', type: 'info', label: 'Автор', value: 'Александр Стрелец' },
         { id: 'qrCode', type: 'qr' }
       ]
     }
   };
 
-  // ---------- load / save ----------
-
   function loadSetting(key) {
-    const saved = storage.load(`setting_${key}`);
+    for (const category of Object.values(settingsConfig)) {
+      for (const setting of category.settings) {
+        if (setting.id === key && setting.type === 'info') {
+          return setting.value;
+        }
+      }
+    }
+
+    const saved = storage.load(`${STORAGE_PREFIX}${key}`);
     if (saved !== null && saved !== undefined) return saved;
+    
     for (const category of Object.values(settingsConfig)) {
       for (const setting of category.settings) {
         if (setting.id === key && setting.default !== undefined) return setting.default;
@@ -108,7 +189,7 @@ modules.settings = (function() {
   }
 
   function saveSetting(key, value) {
-    storage.save(`setting_${key}`, value);
+    storage.save(`${STORAGE_PREFIX}${key}`, value);
     applySetting(key, value);
   }
 
@@ -129,12 +210,11 @@ modules.settings = (function() {
   }
 
   function miniMapThemeFromStorage(stored) {
-    if (stored === 'night') return 'Ночь';
-    if (stored === 'auto') return 'Авто';
-    return 'День';
+    if (stored === 'night' || stored === 'Ночь') return 'Ночь';
+    if (stored === 'auto' || stored === 'Авто') return 'Авто';
+    if (stored === 'day' || stored === 'День') return 'День';
+    return 'Ночь';
   }
-
-  // ---------- apply ----------
 
   function applySetting(key, value) {
     if (isApplyingSetting) return;
@@ -145,16 +225,18 @@ modules.settings = (function() {
           document.documentElement.style.setProperty('--widget-size', value + 'rem');
           document.documentElement.style.setProperty('--clock-digit-size', `calc(${value}rem * 0.2)`);
           setTimeout(() => {
-            const appsCount = loadSetting('appsSlotsCount');
-            if (appsCount) updateAppsSlotsCount(parseInt(appsCount, 10));
-            const climateCount = loadSetting('climateSlotsCount');
-            if (climateCount) updateClimateSlotsCount(parseInt(climateCount, 10));
-            const rightButtons = document.querySelector('.right-buttons');
-            if (rightButtons) rightButtons.style.height = value + 'rem';
-            const timeWidget = document.querySelector('.widget_time');
-            if (timeWidget) timeWidget.style.width = value + 'rem';
-            const navWidget = document.getElementById('widgetNavigation');
-            if (navWidget) navWidget.style.width = value + 'rem';
+            try {
+              const appsCount = loadSetting('appsSlotsCount');
+              if (appsCount) updateAppsSlotsCount(parseInt(appsCount, 10));
+              const climateCount = loadSetting('climateSlotsCount');
+              if (climateCount) updateClimateSlotsCount(parseInt(climateCount, 10));
+              const rightButtons = document.querySelector('.right-buttons');
+              if (rightButtons) rightButtons.style.height = value + 'rem';
+              const timeWidget = document.querySelector('.widget_time');
+              if (timeWidget) timeWidget.style.width = value + 'rem';
+              const navWidget = document.getElementById('widgetNavigation');
+              if (navWidget) navWidget.style.width = value + 'rem';
+            } catch (e) { console.warn('[Settings] widgetSize post-apply:', e); }
           }, 10);
           break;
         }
@@ -163,6 +245,9 @@ modules.settings = (function() {
           document.querySelectorAll('.widget, .picker-drawer, .sidebar, .modal-content, .settings-modal-content, .right-buttons').forEach(el => {
             el.style.backdropFilter = `blur(${value}px)`;
           });
+          break;
+        case 'widgetBottomMargin':
+          document.documentElement.style.setProperty('--dashboard-bottom', value + 'rem');
           break;
         case 'showDate': {
           const dateDisplay = document.getElementById('dateDisplay');
@@ -194,6 +279,17 @@ modules.settings = (function() {
             modules.climate.updateIconColors();
           }
           break;
+        case 'showClimateTemp':
+          storage.save('setting_showClimateTemp', value);
+          break;
+        case 'climateTempOpacity':
+          storage.save('setting_climateTempOpacity', value);
+          document.documentElement.style.setProperty('--climate-temp-opacity', value);
+          break;
+        case 'climateTempFontSize':
+          storage.save('setting_climateTempFontSize', value);
+          document.documentElement.style.setProperty('--climate-temp-font-size', value + 'rem');
+          break;
         case 'fuelTankSize':
           storage.save('setting_fuelTankSize', value);
           if (modules.fuel && typeof modules.fuel.refreshDisplay === 'function') modules.fuel.refreshDisplay();
@@ -213,31 +309,31 @@ modules.settings = (function() {
         case 'showClock': {
           storage.save('setting_showClock', value);
           const clockWidget = document.querySelector('.widget_time');
-          if (clockWidget) clockWidget.classList.toggle('widget-hidden', !value);
+          if (clockWidget) clockWidget.classList.toggle(WIDGET_HIDDEN_CLASS, !value);
           break;
         }
         case 'showClimate': {
           storage.save('setting_showClimate', value);
           const climateWidget = document.querySelector('.widget_climate');
-          if (climateWidget) climateWidget.classList.toggle('widget-hidden', !value);
+          if (climateWidget) climateWidget.classList.toggle(WIDGET_HIDDEN_CLASS, !value);
           break;
         }
         case 'showApps': {
           storage.save('setting_showApps', value);
           const appsWidget = document.querySelector('.widget_apps');
-          if (appsWidget) appsWidget.classList.toggle('widget-hidden', !value);
+          if (appsWidget) appsWidget.classList.toggle(WIDGET_HIDDEN_CLASS, !value);
           break;
         }
         case 'showPlayer': {
           storage.save('setting_showPlayer', value);
           const playerWidget = document.querySelector('.widget_player');
-          if (playerWidget) playerWidget.classList.toggle('widget-hidden', !value);
+          if (playerWidget) playerWidget.classList.toggle(WIDGET_HIDDEN_CLASS, !value);
           break;
         }
         case 'showWeather': {
           storage.save('setting_showWeather', value);
           const weatherWidget = document.getElementById('widgetWeather');
-          if (weatherWidget) weatherWidget.classList.toggle('widget-hidden', !value);
+          if (weatherWidget) weatherWidget.classList.toggle(WIDGET_HIDDEN_CLASS, !value);
           break;
         }
         case 'showMiniMap':
@@ -291,8 +387,6 @@ modules.settings = (function() {
       isApplyingSetting = false;
     }
   }
-
-  // ---------- helpers (не зависят от сайдбара) ----------
 
   function applyOpacity(value) {
     document.documentElement.style.setProperty('--widget-opacity', value);
@@ -513,16 +607,16 @@ modules.settings = (function() {
         img.style.opacity = '0.85';
       }
     });
+    document.body.classList.toggle('climate-icons-white', isWhite);
+    document.body.classList.toggle('climate-icons-black', !isWhite);
   }
 
-  // ---------- QR ----------
-
   function addQrModalStyles() {
-    if (document.getElementById('qr-modal-styles')) return;
+    if (document.getElementById(QR_MODAL_STYLE_ID)) return;
     const style = document.createElement('style');
-    style.id = 'qr-modal-styles';
+    style.id = QR_MODAL_STYLE_ID;
     style.textContent = `
-      .qr-expanded-overlay {
+      .${QR_OVERLAY_CLASS} {
         position: fixed; top: 0; left: 0; right: 0; bottom: 0;
         background: rgba(0,0,0,0.85); backdrop-filter: blur(10px);
         z-index: 30000; display: flex; align-items: center; justify-content: center;
@@ -530,8 +624,8 @@ modules.settings = (function() {
         transition: opacity 0.3s ease, visibility 0.3s ease;
         cursor: pointer;
       }
-      .qr-expanded-overlay.active { opacity: 1; visibility: visible; }
-      .qr-expanded-content {
+      .${QR_OVERLAY_CLASS}.${QR_OVERLAY_ACTIVE_CLASS} { opacity: 1; visibility: visible; }
+      .${QR_CONTENT_CLASS} {
         max-width: 85vw; max-height: 85vh;
         background: rgba(30,33,42,0.95); border-radius: 2rem; padding: 1.5rem;
         border: 1px solid rgba(255,255,255,0.15);
@@ -539,64 +633,64 @@ modules.settings = (function() {
         transform: scale(0.9);
         transition: transform 0.3s cubic-bezier(0.34, 1.2, 0.64, 1);
       }
-      .qr-expanded-overlay.active .qr-expanded-content { transform: scale(1); }
-      .qr-expanded-img {
+      .${QR_OVERLAY_CLASS}.${QR_OVERLAY_ACTIVE_CLASS} .${QR_CONTENT_CLASS} { transform: scale(1); }
+      .${QR_IMAGE_CLASS} {
         width: 100%; height: auto; max-width: 400px; max-height: 70vh;
         border-radius: 1rem; background: white; padding: 1rem; box-sizing: border-box;
       }
-      .qr-expanded-text {
+      .${QR_TEXT_CLASS} {
         text-align: center; margin-top: 1rem; font-size: 0.85rem;
         color: rgba(255,255,255,0.7);
       }
-      body.light .qr-expanded-content {
+      body.${LIGHT_BODY_CLASS} .${QR_CONTENT_CLASS} {
         background: rgba(245,248,255,0.95); border-color: rgba(0,0,0,0.1);
       }
-      body.light .qr-expanded-text { color: rgba(50,60,80,0.8); }
+      body.${LIGHT_BODY_CLASS} .${QR_TEXT_CLASS} { color: rgba(50,60,80,0.8); }
     `;
     document.head.appendChild(style);
   }
 
   function showExpandedQr(qrImgSrc) {
     addQrModalStyles();
-    document.querySelector('.qr-expanded-overlay')?.remove();
+    document.querySelector('.' + QR_OVERLAY_CLASS)?.remove();
     const overlay = document.createElement('div');
-    overlay.className = 'qr-expanded-overlay';
+    overlay.className = QR_OVERLAY_CLASS;
     const content = document.createElement('div');
-    content.className = 'qr-expanded-content';
+    content.className = QR_CONTENT_CLASS;
     content.onclick = (e) => e.stopPropagation();
     const img = document.createElement('img');
     img.src = qrImgSrc;
-    img.className = 'qr-expanded-img';
-    img.alt = 'QR-код для поддержки';
+    img.className = QR_IMAGE_CLASS;
+    img.alt = TEXT_QR_ALT;
     const text = document.createElement('div');
-    text.className = 'qr-expanded-text';
-    text.innerHTML = '✨ Отсканируйте QR-код, чтобы поддержать автора ✨';
+    text.className = QR_TEXT_CLASS;
+    text.innerHTML = TEXT_QR_MAIN;
     content.appendChild(img);
     content.appendChild(text);
     overlay.appendChild(content);
     overlay.addEventListener('click', () => {
-      overlay.classList.remove('active');
-      setTimeout(() => overlay.remove(), 300);
+      overlay.classList.remove(QR_OVERLAY_ACTIVE_CLASS);
+      setTimeout(() => overlay.remove(), QR_OVERLAY_ANIM_MS);
     });
     const onEsc = (e) => {
       if (e.key === 'Escape') {
-        overlay.classList.remove('active');
-        setTimeout(() => overlay.remove(), 300);
+        overlay.classList.remove(QR_OVERLAY_ACTIVE_CLASS);
+        setTimeout(() => overlay.remove(), QR_OVERLAY_ANIM_MS);
         document.removeEventListener('keydown', onEsc);
       }
     };
     document.addEventListener('keydown', onEsc);
     document.body.appendChild(overlay);
-    setTimeout(() => overlay.classList.add('active'), 10);
+    setTimeout(() => overlay.classList.add(QR_OVERLAY_ACTIVE_CLASS), QR_OVERLAY_SHOW_DELAY_MS);
   }
 
   function createQrCode() {
     const container = document.createElement('div');
-    container.className = 'settings-qr-container';
+    container.className = SETTINGS_QR_CONTAINER_CLASS;
     container.style.cssText = 'display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0.5rem 0; gap: 0.5rem; cursor: pointer;';
     const qrImg = document.createElement('img');
-    qrImg.src = 'images/Qrkod.png';
-    qrImg.alt = 'QR-код для поддержки автора';
+    qrImg.src = QR_IMAGE_SRC;
+    qrImg.alt = TEXT_QR_ALT;
     qrImg.style.cssText = 'width: 120px; height: 120px; border-radius: 0.75rem; border: 1px solid rgba(255,255,255,0.15); background: white; padding: 0.5rem; box-shadow: 0 4px 12px rgba(0,0,0,0.2); transition: transform 0.2s ease, box-shadow 0.2s ease; cursor: pointer;';
     qrImg.addEventListener('mouseenter', () => {
       qrImg.style.transform = 'scale(1.02)';
@@ -611,14 +705,14 @@ modules.settings = (function() {
       showExpandedQr(qrImg.src);
     });
     const qrText = document.createElement('div');
-    qrText.className = 'settings-qr-text';
-    qrText.innerHTML = '✨ Если Вам нравится моя работа,<br>подтвердите это переходом по QR ✨';
+    qrText.className = SETTINGS_QR_TEXT_CLASS;
+    qrText.innerHTML = TEXT_QR_HINT;
     qrText.style.cssText = 'font-size: 0.7rem; text-align: center; color: rgba(238,242,247,0.75); line-height: 1.4; max-width: 260px; cursor: pointer;';
     qrText.addEventListener('click', (e) => {
       e.stopPropagation();
       showExpandedQr(qrImg.src);
     });
-    if (document.body.classList.contains('light')) {
+    if (document.body.classList.contains(LIGHT_BODY_CLASS)) {
       qrImg.style.borderColor = 'rgba(0,0,0,0.1)';
       qrText.style.color = 'rgba(50,60,80,0.75)';
     }
@@ -627,13 +721,11 @@ modules.settings = (function() {
     return container;
   }
 
-  // ---------- form controls ----------
-
   function createRangeInput(setting, currentValue) {
     const container = document.createElement('div');
-    container.className = 'settings-range-container';
+    container.className = SETTINGS_RANGE_CONTAINER_CLASS;
     const valueDisplay = document.createElement('span');
-    valueDisplay.className = 'settings-range-value';
+    valueDisplay.className = SETTINGS_RANGE_VALUE_CLASS;
     valueDisplay.textContent = currentValue + (setting.unit ? ` ${setting.unit}` : '');
     const input = document.createElement('input');
     input.type = 'range';
@@ -641,7 +733,7 @@ modules.settings = (function() {
     input.max = setting.max;
     input.step = setting.step || 1;
     input.value = currentValue;
-    input.className = 'settings-range';
+    input.className = SETTINGS_RANGE_CLASS;
     input.addEventListener('input', (e) => {
       e.stopPropagation();
       const val = parseFloat(e.target.value);
@@ -655,7 +747,7 @@ modules.settings = (function() {
 
   function createSelect(setting, currentValue) {
     const select = document.createElement('select');
-    select.className = 'settings-select';
+    select.className = SETTINGS_SELECT_CLASS;
     setting.options.forEach(opt => {
       const option = document.createElement('option');
       option.value = opt;
@@ -673,15 +765,15 @@ modules.settings = (function() {
   function createToggle(setting, currentValue) {
     const toggle = document.createElement('button');
     toggle.type = 'button';
-    toggle.className = `settings-toggle ${currentValue ? 'active' : ''}`;
-    toggle.innerHTML = currentValue ? 'Вкл' : 'Выкл';
+    toggle.className = `${SETTINGS_TOGGLE_CLASS} ${currentValue ? ACTIVE_CLASS : ''}`.trim();
+    toggle.innerHTML = currentValue ? TEXT_TOGGLE_ON : TEXT_TOGGLE_OFF;
     toggle.addEventListener('click', (e) => {
       e.stopPropagation();
       e.preventDefault();
-      const isActive = toggle.classList.contains('active');
+      const isActive = toggle.classList.contains(ACTIVE_CLASS);
       const newValue = !isActive;
-      toggle.classList.toggle('active', newValue);
-      toggle.innerHTML = newValue ? 'Вкл' : 'Выкл';
+      toggle.classList.toggle(ACTIVE_CLASS, newValue);
+      toggle.innerHTML = newValue ? TEXT_TOGGLE_ON : TEXT_TOGGLE_OFF;
       toggle.blur();
       saveSetting(setting.id, newValue);
     });
@@ -693,7 +785,7 @@ modules.settings = (function() {
     input.type = 'text';
     input.value = currentValue || setting.default || '';
     input.placeholder = setting.placeholder || '';
-    input.className = 'settings-text-input';
+    input.className = SETTINGS_TEXT_INPUT_CLASS;
     let pendingTimer = null;
     let lastSavedValue = input.value;
     const commit = () => {
@@ -715,12 +807,37 @@ modules.settings = (function() {
 
   function createInfo(setting) {
     const info = document.createElement('div');
-    info.className = 'settings-info';
+    info.className = SETTINGS_INFO_CLASS;
     info.textContent = setting.value;
     return info;
   }
 
-  // ---------- full reset ----------
+  function createActionButton(setting) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = `${SETTINGS_TOGGLE_CLASS} ${ACTIVE_CLASS}`;
+    btn.textContent = setting.value || 'Запустить';
+    btn.style.minWidth = '100px';
+    
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      
+      if (setting.id === 'onboardingReset') {
+        close(); // Закрываем модальное окно настроек
+        
+        setTimeout(() => {
+          if (modules.onboarding) {
+            storage.remove('onboarding_completed');
+            if (typeof modules.onboarding.init === 'function') {
+              modules.onboarding.init();
+            }
+          }
+        }, 350); // 350мс — гарантия, что модалка закрылась
+      }
+    });
+    return btn;
+  }
 
   async function clearAllAppIcons() {
     try {
@@ -742,7 +859,7 @@ modules.settings = (function() {
     for (const category of Object.values(settingsConfig)) {
       for (const setting of category.settings) {
         if (setting.type !== 'qr' && setting.type !== 'info' && setting.type !== 'button') {
-          storage.remove(`setting_${setting.id}`);
+          storage.remove(`${STORAGE_PREFIX}${setting.id}`);
         }
       }
     }
@@ -761,40 +878,86 @@ modules.settings = (function() {
       'setting_wallpaperCustomServer', 'setting_wallpaperCustomServer2',
       'setting_wallpaperCustomServerEnabled', 'setting_wallpaperCustomServer2Enabled',
       'wallpaper_hidden_builtins', 'wallpaper_custom_list',
-      'climateTrunkOpen', 'setting_user_custom_url', 'setting_user_custom_enabled'
+      'climateTrunkOpen', 'setting_user_custom_url', 'setting_user_custom_enabled',
+      'widgetOrder', 'onboarding_completed'
     ];
     runtimeKeys.forEach(k => storage.remove(k));
     try { await idbStore.clear(); } catch (e) { console.warn(e); }
   }
 
-  // ---------- modal ----------
+  function openSystemSettings() {
+    try {
+      if (typeof window.androidApi !== 'undefined' && typeof window.androidApi.onSettings === 'function') {
+        window.androidApi.onSettings(getToken());
+        return true;
+      }
+      if (typeof android !== 'undefined' && typeof android.onSettings === 'function') {
+        android.onSettings();
+        return true;
+      }
+    } catch (e) {
+      console.warn('[Settings] onSettings error:', e);
+    }
+    if (typeof showToast === 'function') showToast(TEXT_SYS_SETTINGS_UNAVAILABLE, TOAST_DURATION_SHORT);
+    return false;
+  }
 
   function buildModal() {
     const modalOverlay = document.createElement('div');
-    modalOverlay.id = 'settingsModal';
-    modalOverlay.className = 'settings-modal-overlay';
+    modalOverlay.id = SETTINGS_MODAL_ID;
+    modalOverlay.className = SETTINGS_MODAL_CLASS;
     const modalContent = document.createElement('div');
-    modalContent.className = 'settings-modal-content';
+    modalContent.className = SETTINGS_CONTENT_CLASS;
     const header = document.createElement('div');
-    header.className = 'settings-header';
-    header.innerHTML = `
-      <h2>⚙️ Настройки панели</h2>
-      <button class="settings-close-btn" id="settingsCloseBtn" type="button">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M6 18L18 6M6 6l12 12"/>
-        </svg>
-      </button>
+    header.className = SETTINGS_HEADER_CLASS;
+
+    const title = document.createElement('h2');
+    title.className = SETTINGS_HEADER_TITLE_CLASS;
+    title.textContent = TEXT_HEADER_TITLE;
+
+    const refreshBtn = document.createElement('button');
+    refreshBtn.type = 'button';
+    refreshBtn.className = SETTINGS_HEADER_LINK_CLASS;
+    refreshBtn.id = SETTINGS_REFRESH_BTN_ID;
+    refreshBtn.title = TEXT_REFRESH_TITLE;
+    refreshBtn.setAttribute('aria-label', TEXT_REFRESH_BTN);
+    refreshBtn.textContent = TEXT_REFRESH_BTN;
+    refreshBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      refreshBtn.blur();
+      openSystemSettings();
+    });
+
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = SETTINGS_CLOSE_BTN_CLASS;
+    closeBtn.id = SETTINGS_CLOSE_BTN_ID;
+    closeBtn.setAttribute('aria-label', TEXT_CLOSE_ARIA);
+    closeBtn.innerHTML = `
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M6 18L18 6M6 6l12 12"/>
+      </svg>
     `;
+    closeBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      close();
+    });
+
+    header.appendChild(title);
+    header.appendChild(refreshBtn);
+    header.appendChild(closeBtn);
     modalContent.appendChild(header);
+
     const body = document.createElement('div');
-    body.className = 'settings-body';
-    const currentAppVersion = (window.MANIFEST && window.MANIFEST.version) ? String(window.MANIFEST.version) : '—';
+    body.className = SETTINGS_BODY_CLASS;
+    const currentAppVersion = (window.MANIFEST && window.MANIFEST.version) ? String(window.MANIFEST.version) : TEXT_VERSION_FALLBACK;
 
     for (const [, category] of Object.entries(settingsConfig)) {
       const section = document.createElement('div');
-      section.className = 'settings-section';
+      section.className = SETTINGS_SECTION_CLASS;
       const sectionTitle = document.createElement('h3');
-      sectionTitle.className = 'settings-section-title';
+      sectionTitle.className = SETTINGS_SECTION_TITLE_CLASS;
       sectionTitle.textContent = category.title;
       section.appendChild(sectionTitle);
 
@@ -804,9 +967,9 @@ modules.settings = (function() {
           continue;
         }
         const row = document.createElement('div');
-        row.className = 'settings-row';
+        row.className = SETTINGS_ROW_CLASS;
         const label = document.createElement('label');
-        label.className = 'settings-label';
+        label.className = SETTINGS_LABEL_CLASS;
         label.textContent = setting.label;
         label.style.flexShrink = '0';
         row.appendChild(label);
@@ -820,7 +983,8 @@ modules.settings = (function() {
           case 'select': row.appendChild(createSelect(setting, currentValue)); break;
           case 'toggle': row.appendChild(createToggle(setting, currentValue)); break;
           case 'text': row.appendChild(createTextInput(setting, currentValue)); break;
-          case 'info': row.appendChild(createInfo({ ...setting, value: currentValue || '—' })); break;
+          case 'info': row.appendChild(createInfo({ ...setting, value: currentValue || TEXT_VERSION_FALLBACK })); break;
+          case 'button': row.appendChild(createActionButton(setting)); break;
         }
         section.appendChild(row);
       }
@@ -828,13 +992,13 @@ modules.settings = (function() {
     }
 
     const resetBtn = document.createElement('button');
-    resetBtn.className = 'settings-reset-btn';
+    resetBtn.className = SETTINGS_RESET_BTN_CLASS;
     resetBtn.type = 'button';
-    resetBtn.innerHTML = '🔄 Сбросить все настройки';
+    resetBtn.innerHTML = TEXT_RESET_BTN;
     resetBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
       e.preventDefault();
-      if (confirm('Сбросить все настройки панели? Это перезагрузит страницу.')) {
+      if (confirm(TEXT_RESET_CONFIRM)) {
         await performFullReset();
         window.location.reload();
       }
@@ -842,10 +1006,6 @@ modules.settings = (function() {
     body.appendChild(resetBtn);
     modalContent.appendChild(body);
     modalOverlay.appendChild(modalContent);
-    modalOverlay.querySelector('#settingsCloseBtn')?.addEventListener('click', (e) => {
-      e.stopPropagation();
-      close();
-    });
     modalOverlay.addEventListener('click', (e) => {
       if (e.target === modalOverlay) close();
     });
@@ -857,19 +1017,19 @@ modules.settings = (function() {
     if (modal) modal.remove();
     modal = buildModal();
     document.body.appendChild(modal);
-    setTimeout(() => modal.classList.add('open'), 10);
+    setTimeout(() => modal.classList.add(OPEN_CLASS), OPEN_DELAY_MS);
     isOpen = true;
     document.body.style.overflow = 'hidden';
   }
 
   function close() {
     if (modal) {
-      modal.classList.remove('open');
+      modal.classList.remove(OPEN_CLASS);
       const localModal = modal;
       setTimeout(() => {
-        if (localModal && localModal.parentNode) localModal.remove();
+        if (localModal && localModal.parentNode) localModal.parentNode.removeChild(localModal);
         modal = null;
-      }, 300);
+      }, MODAL_ANIMATION_MS);
     }
     isOpen = false;
     document.body.style.overflow = '';
@@ -885,7 +1045,7 @@ modules.settings = (function() {
         const climateCount = loadSetting('climateSlotsCount');
         if (climateCount) updateClimateSlotsCount(parseInt(climateCount, 10));
       } catch (e) { console.warn(e); }
-    }, 200);
+    }, RESIZE_DEBOUNCE_MS);
   }
 
   function init() {
@@ -893,6 +1053,7 @@ modules.settings = (function() {
     applySetting('widgetSize', loadSetting('widgetSize') || 13.5);
     applySetting('widgetOpacity', loadSetting('widgetOpacity') || 1);
     applySetting('widgetBlur', loadSetting('widgetBlur') || 10);
+    applySetting('widgetBottomMargin', loadSetting('widgetBottomMargin') || 0.5);
     applySetting('showClockWeather', loadSetting('showClockWeather') !== false);
     applySetting('showDate', loadSetting('showDate') !== false);
     applySetting('showWeekday', loadSetting('showWeekday') !== false);
@@ -900,6 +1061,9 @@ modules.settings = (function() {
     applySetting('climateOffButton', loadSetting('climateOffButton') !== false);
     applySetting('climateSlotsCount', loadSetting('climateSlotsCount') || '6');
     applySetting('climateIconColor', loadSetting('climateIconColor') || 'Белый');
+    applySetting('showClimateTemp', loadSetting('showClimateTemp') !== false);
+    applySetting('climateTempOpacity', loadSetting('climateTempOpacity') || 0.4);
+    applySetting('climateTempFontSize', loadSetting('climateTempFontSize') || 8);
     applySetting('fuelTankSize', loadSetting('fuelTankSize') || '60');
     applySetting('fuelDisplayMode', loadSetting('fuelDisplayMode') || 'Проценты');
     applySetting('showWeather', loadSetting('showWeather') === true);
@@ -937,13 +1101,16 @@ modules.settings = (function() {
       };
       settingsBtn._clickHandler = clickHandler;
       settingsBtn.addEventListener('click', clickHandler);
-      if (typeof attachOemTouchFeedback === 'function') attachOemTouchFeedback(settingsBtn);
+
+      if (typeof attachOemTouchFeedback === 'function') {
+        attachOemTouchFeedback(settingsBtn);
+      }
     }
+
     window.addEventListener('resize', handleResize);
     window.addEventListener('orientationchange', handleResize);
   }
 
-  // Экспортируем также loadSetting/saveSetting — сайдбару они понадобятся
   return {
     init,
     open,
@@ -951,6 +1118,7 @@ modules.settings = (function() {
     applyOpacityToNewElement,
     loadSetting,
     saveSetting,
-    applySetting
+    applySetting,
+    openSystemSettings
   };
 })();

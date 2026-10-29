@@ -10,6 +10,9 @@
  * [FIX] Разворачиваем вложенные обёртки data.response / data.data.
  * [FIX] Принудительный запрос музыки при возврате к панели (pageshow, focus, visibilitychange).
  * [FIX] Принудительный запрос при любом клике по виджету плеера.
+ * [FIX] Интерактивная обратная связь громкости: опрос getvol каждые 400 мс.
+ * [NEW] EventBus: volumeChanged через подписку.
+ * [FIX] startProgressTick не перезаписывает свежую позицию из updateMusicInfo.
  **********************************************/
 
 modules.player = (function() {
@@ -22,7 +25,7 @@ modules.player = (function() {
   const timeSpans = document.querySelectorAll(".widget_player__track_time span");
   const timeCurrentSpan = timeSpans[0];
   const timeDurationSpan = timeSpans[1];
-  
+
   const playPauseBtn = document.getElementById("player__playpause");
   const playPausePath = document.getElementById("player__playpause_path");
 
@@ -37,15 +40,20 @@ modules.player = (function() {
   let progressTimer = null;
   let currentVolume = 50;
   let isDraggingProgress = false;
-  
+
   let musicPollInterval = null;
+  let volumePollInterval = null;
+  const VOLUME_POLL_MS = 400;
   let visibilityHandler = null;
   let focusHandler = null;
   let pageshowHandler = null;
-  
+  let touchRefreshHandler = null;
+
   let lastTitle = null;
   let lastArtist = null;
   let lastImgBase64 = null;
+
+  let lastExplicitPositionTs = 0;
 
   function formatTime(ms) {
     if (!Number.isFinite(ms) || ms < 0) return "0:00";
@@ -79,8 +87,15 @@ modules.player = (function() {
     if (!isPlaying) return;
     if (!Number.isFinite(trackDuration) || trackDuration <= 0) return;
 
-    trackPosition = currentPosition();
-    positionTimestamp = Date.now();
+    // Если позиция была явно установлена недавно (updateMusicInfo / seek),
+    // не перезаписываем её — просто фиксируем timestamp.
+    const now = Date.now();
+    if (now - lastExplicitPositionTs > 800) {
+      trackPosition = currentPosition();
+      positionTimestamp = now;
+    } else {
+      positionTimestamp = now;
+    }
 
     progressTimer = setInterval(() => {
       if (!isPlaying || isDraggingProgress) return;
@@ -145,6 +160,7 @@ modules.player = (function() {
     if (!Number.isFinite(newPos)) return undefined;
     trackPosition = newPos;
     positionTimestamp = Date.now();
+    lastExplicitPositionTs = positionTimestamp;
     updateProgressUI(newPos, trackDuration);
     return newPos;
   }
@@ -306,9 +322,35 @@ modules.player = (function() {
     if (volume === undefined || volume === null) return;
     const raw = (typeof volume === 'object') ? (volume.volume ?? volume.value) : volume;
     const vol = parseInt(raw, 10);
-    if (!isNaN(vol) && vol >= 0 && vol <= 100 && vol !== currentVolume) {
+    if (!isNaN(vol) && vol >= 0 && vol <= 100) {
       updateVolumeUI(vol);
     }
+  }
+
+  function pollVolume() {
+    if (document.hidden) return;
+    try {
+      if (modules.volume && typeof modules.volume.fetchVolume === 'function') {
+        modules.volume.fetchVolume(true);
+      } else if (typeof android !== 'undefined' && typeof android.getVolume === 'function') {
+        const v = android.getVolume();
+        const vol = parseInt(v, 10);
+        if (!isNaN(vol) && vol >= 0 && vol <= 100) {
+          handleVolumeFromSystem(vol);
+        }
+      }
+    } catch (e) {
+      /* noop */
+    }
+  }
+
+  function startVolumePoll() {
+    stopVolumePoll();
+    volumePollInterval = setInterval(pollVolume, VOLUME_POLL_MS);
+  }
+
+  function stopVolumePoll() {
+    if (volumePollInterval) { clearInterval(volumePollInterval); volumePollInterval = null; }
   }
 
   function parsePlayFlag(raw) {
@@ -336,18 +378,13 @@ modules.player = (function() {
     return data;
   }
 
-  // Принудительный запрос свежих данных музыки.
-  // Пробуем все доступные способы, чтобы Android прислал musicInfo.
   function requestMusicRefresh() {
-    // 1. Прямой метод (если реализован в мосте)
     try { if (typeof android.requestMusicState === 'function') android.requestMusicState(); } catch (e) {}
-    // 2. Через carData (некоторые реализации поддерживают ключ 'music')
     try {
       if (typeof android.requestCarDataAsync === 'function') {
         android.requestCarDataAsync('music', 1500).catch(() => {});
       }
     } catch (e) {}
-    // 3. Через carData 'all' — вдруг музыка там есть
     try {
       if (typeof android.requestCarDataAsync === 'function') {
         android.requestCarDataAsync('all', 2000).catch(() => {});
@@ -359,7 +396,6 @@ modules.player = (function() {
     const data = unwrapPayload(rawData);
     if (!data) return;
 
-    // Название: не затираем старое пустым
     const rawTitle = data.SongName ?? data.title ?? data.name ?? data.track;
     if (titleEl) {
       if (isNonEmptyString(rawTitle)) {
@@ -372,7 +408,6 @@ modules.player = (function() {
       }
     }
 
-    // Исполнитель: не затираем старое пустым
     const rawArtist = data.SongArtist ?? data.artist ?? data.author ?? data.singer;
     if (artistEl) {
       if (isNonEmptyString(rawArtist)) {
@@ -385,7 +420,6 @@ modules.player = (function() {
       }
     }
 
-    // Обложка
     if (imgEl) {
       const pic = data.SongAlbumPicture || data.picture;
       if (pic) {
@@ -399,7 +433,14 @@ modules.player = (function() {
       }
     }
 
-    // Длительность и позиция
+    const rawVol = data.Volume ?? data.volume ?? data.Vol ?? data.vol;
+    if (rawVol !== undefined && rawVol !== null) {
+      const v = parseInt(rawVol, 10);
+      if (!isNaN(v) && v >= 0 && v <= 100) {
+        updateVolumeUI(v);
+      }
+    }
+
     let dur = parseFloat(data.Trdur ?? data.duration ?? 0);
     let pos = parseFloat(data.Trpos ?? data.position ?? 0);
     if (!Number.isFinite(dur)) dur = 0;
@@ -413,6 +454,7 @@ modules.player = (function() {
     if (!isPlaying || Math.abs(computed - pos) > 2000) {
       trackPosition = pos;
       positionTimestamp = Date.now();
+      lastExplicitPositionTs = positionTimestamp;
       if (trackPosition > trackDuration) trackPosition = trackDuration;
       if (trackPosition < 0) trackPosition = 0;
       if (!isPlaying) {
@@ -420,7 +462,6 @@ modules.player = (function() {
       }
     }
 
-    // Статус воспроизведения
     const playRaw = (data.IsPlaying !== undefined) ? data.IsPlaying
                   : (data.PlayStat   !== undefined) ? data.PlayStat
                   : (data.playState  !== undefined) ? data.playState
@@ -438,7 +479,6 @@ modules.player = (function() {
     if (isInitialized) return;
     isInitialized = true;
 
-    // Кнопки
     document.getElementById("player__prev")?.addEventListener("click", () => {
       if (typeof android.runEnum === 'function') android.runEnum("MEDIA_BLACK");
       requestMusicRefresh();
@@ -448,19 +488,16 @@ modules.player = (function() {
       requestMusicRefresh();
     });
     if (playPauseBtn) playPauseBtn.addEventListener("click", onPlayPauseClick);
-    
-    // Клик по любому месту виджета (кроме интерактивных зон) — принудительный запрос
+
     if (playerWidget) {
       playerWidget.addEventListener('click', (e) => {
-        // Если клик по кнопке — не дублируем (кнопки сами вызывают refresh)
         if (e.target.closest('button')) return;
-        // Если клик по прогресс-бару или слайдеру — не мешаем
         if (e.target.closest('.widget_player__track_line') ||
             e.target.closest('.widget_player__volume_slider')) return;
         requestMusicRefresh();
       });
     }
-    
+
     if (trackLine) {
       trackLine.addEventListener("click", onProgressClick);
       initProgressDrag();
@@ -470,12 +507,14 @@ modules.player = (function() {
     if (modules.volume && modules.volume.subscribe) {
       modules.volume.subscribe(handleVolumeFromSystem);
     }
+    if (typeof EventBus !== 'undefined') {
+      EventBus.on('volumeChanged', (data) => handleVolumeFromSystem(data));
+    }
     renderPlayState();
-    
-    // Первичный запрос
-    requestMusicRefresh();
 
-    // Постоянный опрос (если страница видима)
+    requestMusicRefresh();
+    startVolumePoll();
+
     if (musicPollInterval) clearInterval(musicPollInterval);
     musicPollInterval = setInterval(() => {
       if (!document.hidden) {
@@ -483,51 +522,48 @@ modules.player = (function() {
       }
     }, 1500);
 
-    // visibilitychange — при возврате запрашиваем с задержкой (Android может ещё не быть готов)
     visibilityHandler = () => {
       if (document.hidden) {
         stopProgressTick();
+        stopVolumePoll();
       } else {
-        // Небольшая задержка, чтобы Android успел выйти из фона
         setTimeout(requestMusicRefresh, 100);
         setTimeout(requestMusicRefresh, 500);
         if (isPlaying && !progressTimer) startProgressTick();
+        startVolumePoll();
       }
     };
     document.addEventListener('visibilitychange', visibilityHandler);
 
-    // pageshow — срабатывает при восстановлении страницы из bfcache или возврате
     pageshowHandler = (event) => {
       if (event.persisted) {
         requestMusicRefresh();
       } else {
-        // Даже если не persisted — запросим на всякий случай
         setTimeout(requestMusicRefresh, 100);
       }
     };
     window.addEventListener('pageshow', pageshowHandler);
 
-    // focus на window — когда окно получает фокус (возврат из другого приложения)
     focusHandler = () => {
       setTimeout(requestMusicRefresh, 100);
       setTimeout(requestMusicRefresh, 500);
     };
     window.addEventListener('focus', focusHandler);
 
-    // Дополнительно: при любом касании/клике по документу (если пользователь вернулся и тапнул)
-    // Но только один раз за сессию касания, чтобы не спамить
     let lastTouchRefresh = 0;
-    document.addEventListener('touchstart', () => {
+    touchRefreshHandler = () => {
       const now = Date.now();
       if (now - lastTouchRefresh > 2000) {
         lastTouchRefresh = now;
         setTimeout(requestMusicRefresh, 50);
       }
-    }, { passive: true });
+    };
+    document.addEventListener('touchstart', touchRefreshHandler, { passive: true });
   }
 
   function destroy() {
     if (musicPollInterval) { clearInterval(musicPollInterval); musicPollInterval = null; }
+    stopVolumePoll();
     stopProgressTick();
     if (visibilityHandler) {
       document.removeEventListener('visibilitychange', visibilityHandler);
@@ -540,6 +576,10 @@ modules.player = (function() {
     if (focusHandler) {
       window.removeEventListener('focus', focusHandler);
       focusHandler = null;
+    }
+    if (touchRefreshHandler) {
+      document.removeEventListener('touchstart', touchRefreshHandler);
+      touchRefreshHandler = null;
     }
     isInitialized = false;
   }

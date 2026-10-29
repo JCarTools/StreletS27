@@ -2,17 +2,19 @@
  * Модуль: Погода
  * [FIX] Баг #5: формирование локального текущего часа для Open-Meteo.
  * [FIX] Защита от null в callbacks и мосте.
+ * [NEW] EventBus: подписка на gps/weather вместо переопределения onAndroidEvent.
+ * [FIX] Корректный поиск часа в hourly: сравниваем по UTC-строке.
  **********************************************/
 
 modules.weather = (function() {
   const container = document.getElementById('widgetWeatherContent');
-  
+
   let currentLat = null;
   let currentLon = null;
   let lastRequestTime = 0;
   let lastOpenMeteoTime = 0;
   let openMeteoInterval = null;
-  
+
   let bridgeData = null;
   let extraData = null;
   let callbacks = [];
@@ -46,7 +48,7 @@ modules.weather = (function() {
       const city = bridgeData.city || '';
       const condition = bridgeData.condition || '';
       const tempStr = String(temp).includes('°') ? String(temp) : `${temp}°`;
-      
+
       const iconSvg = getWeatherIcon(condition);
 
       let extraHtml = '';
@@ -72,14 +74,45 @@ modules.weather = (function() {
     notify();
   }
 
-  function getLocalHourPrefix(date) {
-    // Open-Meteo с timezone=auto возвращает локальное время в формате "YYYY-MM-DDTHH:00".
-    // Формируем префикс "YYYY-MM-DDTHH" на основе локального времени.
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, '0');
-    const d = String(date.getDate()).padStart(2, '0');
-    const h = String(date.getHours()).padStart(2, '0');
-    return `${y}-${m}-${d}T${h}`;
+  /**
+   * Ищет индекс текущего часа в hourly.time.
+   * Open-Meteo возвращает time в формате "YYYY-MM-DDTHH:MM" в часовом поясе координат
+   * (при timezone=auto). Сравниваем по префиксу "YYYY-MM-DDTHH".
+   * Если не нашли по локальному времени, пробуем UTC.
+   */
+  function findCurrentHourIndex(hourly) {
+    if (!hourly || !Array.isArray(hourly.time)) return -1;
+    const now = new Date();
+
+    const makePrefix = (d) => {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      const h = String(d.getHours()).padStart(2, '0');
+      return `${y}-${m}-${day}T${h}`;
+    };
+
+    // 1. Локальный час
+    const localPrefix = makePrefix(now);
+    let idx = hourly.time.findIndex(t => String(t).startsWith(localPrefix));
+    if (idx !== -1) return idx;
+
+    // 2. UTC-час
+    const utcPrefix = makePrefix(new Date(now.getTime() + now.getTimezoneOffset() * 60000));
+    idx = hourly.time.findIndex(t => String(t).startsWith(utcPrefix));
+    if (idx !== -1) return idx;
+
+    // 3. Ближайший по времени
+    const nowMs = now.getTime();
+    let bestIdx = -1;
+    let bestDiff = Infinity;
+    for (let i = 0; i < hourly.time.length; i++) {
+      const t = Date.parse(String(hourly.time[i]) + 'Z');
+      if (!Number.isFinite(t)) continue;
+      const diff = Math.abs(t - nowMs);
+      if (diff < bestDiff) { bestDiff = diff; bestIdx = i; }
+    }
+    return bestIdx;
   }
 
   async function fetchOpenMeteo() {
@@ -92,14 +125,14 @@ modules.weather = (function() {
       const res = await fetch(url);
       if (!res.ok) return;
       const data = await res.json();
-      
+
       if (data && data.current_weather) {
         const wind = Math.round(data.current_weather.windspeed);
         let humidity = undefined;
         let feels = undefined;
+
         if (data.hourly && Array.isArray(data.hourly.time)) {
-          const prefix = getLocalHourPrefix(new Date());
-          const idx = data.hourly.time.findIndex(t => String(t).startsWith(prefix));
+          const idx = findCurrentHourIndex(data.hourly);
           if (idx !== -1) {
             if (Array.isArray(data.hourly.relativehumidity_2m) && data.hourly.relativehumidity_2m[idx] !== undefined) {
               humidity = data.hourly.relativehumidity_2m[idx];
@@ -157,26 +190,23 @@ modules.weather = (function() {
     }, 10 * 60 * 1000);
   }
 
-  const _origOnAndroidEventWeather = window.onAndroidEvent;
-  window.onAndroidEvent = function(type, data) {
-    if (type === 'gps') {
-      const lat = Number(data?.lat);
-      const lon = Number(data?.lon);
-      if (Number.isFinite(lat) && Number.isFinite(lon)) {
-        currentLat = lat; currentLon = lon;
-        requestWeatherFromBridge();
-        fetchOpenMeteo();
-      }
-    } else if (type === 'weather') {
-      bridgeData = data;
-      render();
-    }
-    if (typeof _origOnAndroidEventWeather === 'function') {
-      try { _origOnAndroidEventWeather(type, data); } catch (e) {}
-    }
-  };
-
   function init() {
+    if (typeof EventBus !== 'undefined') {
+      EventBus.on('gps', (data) => {
+        const lat = Number(data?.lat);
+        const lon = Number(data?.lon);
+        if (Number.isFinite(lat) && Number.isFinite(lon)) {
+          currentLat = lat; currentLon = lon;
+          requestWeatherFromBridge();
+          fetchOpenMeteo();
+        }
+      });
+      EventBus.on('weather', (data) => {
+        bridgeData = data;
+        render();
+      });
+    }
+
     if (typeof android.getWeather === 'function') {
       const saved = android.getWeather();
       if (saved && !saved.error) { bridgeData = saved; render(); }

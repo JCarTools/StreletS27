@@ -1,6 +1,8 @@
 /**********************************************
  * Модуль: Управление громкостью
  * handleVolumeFromSystem понимает объект {volume, value}.
+ * [FIX] Улучшен парсинг данных из Android (включая массивы и вложенные объекты).
+ * [FIX] fetchVolume(force) — принудительный опрос без защиты от эха.
  **********************************************/
 
 modules.volume = (function() {
@@ -11,7 +13,7 @@ modules.volume = (function() {
 
   let lastSetValue = null;
   let lastSetTime = 0;
-  const ECHO_SUPPRESS_MS = 4000;
+  const ECHO_SUPPRESS_MS = 2000;
 
   function isSuppressing() {
     return lastSetValue !== null && (Date.now() - lastSetTime) < ECHO_SUPPRESS_MS;
@@ -19,20 +21,35 @@ modules.volume = (function() {
 
   function parseVolumeValue(raw) {
     if (raw === undefined || raw === null) return null;
-    const candidate = (typeof raw === 'object') ? (raw.volume ?? raw.value) : raw;
+    
+    if (Array.isArray(raw) && raw.length > 0) {
+      raw = raw[0];
+    }
+    
+    let candidate = raw;
+    if (typeof raw === 'object') {
+      candidate = raw.volume ?? raw.value ?? raw.vol ?? raw.level;
+    }
+    
+    if (typeof candidate === 'string') {
+      candidate = candidate.replace(/[^0-9]/g, '');
+    }
+
     const num = parseInt(candidate, 10);
     if (isNaN(num) || num < 0 || num > 100) return null;
     return num;
   }
 
-  function fetchVolume() {
+  function fetchVolume(force = false) {
     try {
       const raw = android.getVolume();
       const newVolume = parseVolumeValue(raw);
       if (newVolume === null) return currentVolume;
-      if (isSuppressing() && newVolume !== lastSetValue) {
+      
+      if (!force && isSuppressing() && newVolume !== lastSetValue) {
         return currentVolume;
       }
+      
       if (newVolume !== currentVolume) {
         currentVolume = newVolume;
         notifyCallbacks(currentVolume);
@@ -98,7 +115,9 @@ modules.volume = (function() {
   function handleVolumeFromSystem(volume) {
     const newVolume = parseVolumeValue(volume);
     if (newVolume === null) return;
-    lastSetValue = null;
+    
+    lastSetValue = null; 
+    
     if (newVolume !== currentVolume) {
       currentVolume = newVolume;
       notifyCallbacks(currentVolume);

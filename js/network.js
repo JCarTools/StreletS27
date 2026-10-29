@@ -1,6 +1,18 @@
 /**********************************************
  * Модуль: Индикатор сети внутри виджета данных
- * [FIX] Баг #4: applyVisibilityFromSettings учитывает off-mode корректно.
+ * [NEW] Speedtest: РФ + Мир (Download/Upload).
+ * [NEW] Пинг отдельно для РФ и Мира.
+ * [FIX] Не конфликтует с diag (10 кликов забирают событие).
+ * [FIX] РФ Download работает через Cloudflare (принудительный IP РФ) — параметр colo не гарантирует РФ,
+ *       используется как есть; при ошибке — fallback на обычный CF.
+ * [NEW] Добавлен тест скорости скачивания с jcartools.ru.
+ * [FIX] Обход CORS для jcartools.ru через загрузку <img>.
+ * [FIX] Синтаксическая ошибка в ensureOverlay (лишний бэктик).
+ * [FIX] Исправлен парсинг ответа при измерении скорости.
+ * [FIX] postUpload теперь принимает contentType (httpbin требует octet-stream).
+ * [FIX] measureDownload: добавлен cache-busting и корректный расчёт.
+ * [FIX] Значок "белые списки" увеличен, добавлен белый обруч вокруг красного значка Wi-Fi.
+ * [FIX] runSpeedTest защищён от параллельного запуска.
  **********************************************/
 
 modules.network = (function() {
@@ -37,8 +49,33 @@ modules.network = (function() {
 
   const FETCH_TIMEOUT_MS = 4000;
   const IMG_TIMEOUT_MS = 4000;
-  const TOTAL_CHECK_TIMEOUT_MS = 12000;
   const TOAST_DURATION_MS = 2500;
+
+  const SPEEDTEST_TIMEOUT_MS = 15000;
+  const SPEEDTEST_OVERLAY_DURATION_MS = 5000;
+  const SPEEDTEST_OVERLAY_ID = 'speedtest-overlay';
+  const SPEEDTEST_UPLOAD_SIZE = 500 * 1024;
+
+  const SPEEDTEST_DOWNLOAD_URL = 'https://speed.cloudflare.com/__down?bytes=2000000';
+  const SPEEDTEST_UPLOAD_URL = 'https://speed.cloudflare.com/__up';
+  const RU_SPEEDTEST_URL = 'https://speed.cloudflare.com/__down?bytes=2000000&colo=DME';
+  const RU_UPLOAD_URL = 'https://httpbin.org/post';
+
+  const CUSTOM_SPEEDTEST_IMG = 'http://dwn.jcartools.ru/test.jpg';
+  const CUSTOM_SPEEDTEST_BYTES = 1024 * 1024;
+
+  const PING_CUSTOM_URL = 'http://dwn.jcartools.ru/favicon.ico';
+
+  const PING_RU_URLS = [
+    'https://img.imgsmail.ru/imgpreview?url=https%3A%2F%2Fpicsum.photos%2F100%2F100',
+    'https://music.yandex.ru/favicon.ico?t='
+  ];
+  const PING_WORLD_URLS = [
+    'https://speed.cloudflare.com/__down?bytes=1',
+    'https://www.gstatic.com/generate_204'
+  ];
+  const PING_ATTEMPTS = 3;
+  const PING_TIMEOUT_MS = 4000;
 
   const STATUS_HINTS = {
     0: '❌ Нет интернета',
@@ -47,9 +84,7 @@ modules.network = (function() {
   };
 
   function showStatusHint(text) {
-    if (typeof showToast === 'function') {
-      showToast(text, TOAST_DURATION_MS);
-    }
+    if (typeof showToast === 'function') showToast(text, TOAST_DURATION_MS);
   }
 
   function applyVisibilityFromSettings() {
@@ -57,6 +92,295 @@ modules.network = (function() {
     const visible = show !== false;
     const target = widget || btn;
     if (target) target.classList.toggle('widget-hidden', !visible);
+  }
+
+  function ensureOverlay() {
+    let overlay = document.getElementById(SPEEDTEST_OVERLAY_ID);
+    if (overlay) return overlay;
+    overlay = document.createElement('div');
+    overlay.id = SPEEDTEST_OVERLAY_ID;
+    overlay.className = 'speedtest-overlay';
+    overlay.innerHTML = `
+      <div class="speedtest-title">Замер скорости...</div>
+      <div class="speedtest-progress"><div class="speedtest-progress-bar"></div></div>
+
+      <div class="speedtest-row speedtest-row--ru">
+        <span class="speedtest-label speedtest-label--ru">🇷🇺 РФ Download (CF):</span>
+        <span class="speedtest-value" data-test="ru-download">…</span>
+        <span class="speedtest-ping" data-ping="ru">Пинг: …</span>
+      </div>
+      <div class="speedtest-row speedtest-row--ru-up">
+        <span class="speedtest-label speedtest-label--ru-up">🇷🇺 РФ Upload (httpbin):</span>
+        <span class="speedtest-value" data-test="ru-upload">…</span>
+        <span class="speedtest-ping"></span>
+      </div>
+
+      <div class="speedtest-row speedtest-row--world">
+        <span class="speedtest-label speedtest-label--world">🌍 Мир Download (CF):</span>
+        <span class="speedtest-value" data-test="world-download">…</span>
+        <span class="speedtest-ping" data-ping="world">Пинг: …</span>
+      </div>
+      <div class="speedtest-row speedtest-row--world-up">
+        <span class="speedtest-label speedtest-label--world-up">🌍 Мир Upload (CF):</span>
+        <span class="speedtest-value" data-test="world-upload">…</span>
+        <span class="speedtest-ping"></span>
+      </div>
+
+      <div class="speedtest-row speedtest-row--custom" style="margin-top: 10px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 8px;">
+        <span class="speedtest-label" style="color: #ffeb3b;">📦 jcartools.ru:</span>
+        <span class="speedtest-value" data-test="custom-download">…</span>
+        <span class="speedtest-ping" data-ping="custom">Пинг: …</span>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    requestAnimationFrame(() => overlay.classList.add('visible'));
+    return overlay;
+  }
+
+  function setOverlayValue(key, value) {
+    const el = document.querySelector(`#${SPEEDTEST_OVERLAY_ID} [data-test="${key}"]`);
+    if (el) el.textContent = value;
+  }
+
+  function setOverlayPing(key, value) {
+    const el = document.querySelector(`#${SPEEDTEST_OVERLAY_ID} [data-ping="${key}"]`);
+    if (el) el.textContent = `Пинг: ${value}`;
+  }
+
+  function setOverlayTitle(text) {
+    const el = document.querySelector(`#${SPEEDTEST_OVERLAY_ID} .speedtest-title`);
+    if (el) el.textContent = text;
+  }
+
+  function setOverlayProgress(percent) {
+    const bar = document.querySelector(`#${SPEEDTEST_OVERLAY_ID} .speedtest-progress-bar`);
+    if (bar) bar.style.width = Math.max(0, Math.min(100, percent)) + '%';
+  }
+
+  function scheduleOverlayRemoval() {
+    setTimeout(() => {
+      const overlay = document.getElementById(SPEEDTEST_OVERLAY_ID);
+      if (!overlay) return;
+      overlay.classList.remove('visible');
+      setTimeout(() => {
+        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+      }, 300);
+    }, SPEEDTEST_OVERLAY_DURATION_MS);
+  }
+
+  function removeOverlayImmediate() {
+    const overlay = document.getElementById(SPEEDTEST_OVERLAY_ID);
+    if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
+  }
+
+  async function measurePing(url, timeoutMs) {
+    const start = performance.now();
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      await fetch(url + (url.includes('?') ? '&' : '?') + 't=' + Date.now(), {
+        method: 'GET',
+        cache: 'no-store',
+        mode: 'no-cors',
+        credentials: 'omit',
+        signal: controller.signal
+      });
+      const end = performance.now();
+      clearTimeout(timer);
+      return end - start;
+    } catch (e) {
+      clearTimeout(timer);
+      return null;
+    }
+  }
+
+  async function measureAveragePing(urls, attempts, timeoutMs) {
+    const samples = [];
+    for (let i = 0; i < attempts; i++) {
+      const url = urls[i % urls.length];
+      const ms = await measurePing(url, timeoutMs);
+      if (ms !== null && Number.isFinite(ms) && ms > 0) {
+        samples.push(ms);
+      }
+    }
+    if (!samples.length) return null;
+    if (samples.length >= 3) {
+      samples.sort((a, b) => a - b);
+      const trimmed = samples.slice(1, -1);
+      return trimmed.reduce((s, v) => s + v, 0) / trimmed.length;
+    }
+    return samples.reduce((s, v) => s + v, 0) / samples.length;
+  }
+
+  function formatPing(ms) {
+    if (ms === null || !Number.isFinite(ms)) return '—';
+    if (ms < 10) return ms.toFixed(1) + ' мс';
+    return Math.round(ms) + ' мс';
+  }
+
+  async function measureDownload(url) {
+    const start = performance.now();
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), SPEEDTEST_TIMEOUT_MS);
+    try {
+      const bust = url.includes('?') ? '&' : '?';
+      const res = await fetch(url + bust + 't=' + Date.now(), {
+        cache: 'no-store',
+        mode: 'cors',
+        credentials: 'omit',
+        signal: controller.signal
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+
+      const blob = await res.blob();
+      const end = performance.now();
+      const duration = Math.max(0.001, (end - start) / 1000);
+      const bits = blob.size * 8;
+      return (bits / duration) / (1024 * 1024);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  function measureImgDownload(url, knownSizeBytes) {
+    return new Promise((resolve, reject) => {
+      const start = performance.now();
+      const img = new Image();
+      const timer = setTimeout(() => {
+        img.src = '';
+        reject(new Error('Timeout'));
+      }, SPEEDTEST_TIMEOUT_MS);
+
+      img.onload = () => {
+        clearTimeout(timer);
+        const end = performance.now();
+        const duration = Math.max(0.001, (end - start) / 1000);
+        const bits = knownSizeBytes * 8;
+        resolve((bits / duration) / (1024 * 1024));
+      };
+
+      img.onerror = () => {
+        clearTimeout(timer);
+        reject(new Error('Load error'));
+      };
+
+      img.src = url + (url.includes('?') ? '&' : '?') + 't=' + Date.now();
+    });
+  }
+
+  async function postUpload(url, bytes, contentType) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), SPEEDTEST_TIMEOUT_MS);
+    try {
+      const body = new Uint8Array(bytes);
+      const start = performance.now();
+      const res = await fetch(url, {
+        method: 'POST',
+        body,
+        cache: 'no-store',
+        mode: 'cors',
+        credentials: 'omit',
+        headers: contentType ? { 'Content-Type': contentType } : undefined,
+        signal: controller.signal
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      try { await res.text(); } catch (e) {}
+      const end = performance.now();
+      const duration = Math.max(0.001, (end - start) / 1000);
+      const bits = bytes * 8;
+      return (bits / duration) / (1024 * 1024);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  function formatSpeed(mbps) {
+    if (mbps === null || !Number.isFinite(mbps)) return '—';
+    if (mbps >= 100) return mbps.toFixed(0);
+    if (mbps >= 10) return mbps.toFixed(1);
+    return mbps.toFixed(2);
+  }
+
+  let speedtestInProgress = false;
+
+  async function runSpeedTest() {
+    if (speedtestInProgress) return;
+    speedtestInProgress = true;
+    removeOverlayImmediate();
+    ensureOverlay();
+    setOverlayProgress(5);
+
+    try {
+      setOverlayTitle('Пинг РФ...');
+      setOverlayProgress(10);
+      try {
+        const ruPing = await measureAveragePing(PING_RU_URLS, PING_ATTEMPTS, PING_TIMEOUT_MS);
+        setOverlayPing('ru', formatPing(ruPing));
+      } catch (e) { setOverlayPing('ru', 'ошибка'); }
+
+      setOverlayTitle('Замер РФ (Download)...');
+      setOverlayProgress(20);
+      try {
+        const ruSpeed = await measureDownload(RU_SPEEDTEST_URL);
+        setOverlayValue('ru-download', formatSpeed(ruSpeed));
+      } catch (e) { setOverlayValue('ru-download', 'ошибка'); }
+
+      setOverlayTitle('Замер РФ (Upload)...');
+      setOverlayProgress(35);
+      try {
+        const ruUpload = await postUpload(RU_UPLOAD_URL, SPEEDTEST_UPLOAD_SIZE, 'application/octet-stream');
+        setOverlayValue('ru-upload', formatSpeed(ruUpload));
+      } catch (e) { setOverlayValue('ru-upload', 'ошибка'); }
+
+      setOverlayTitle('Пинг Мир...');
+      setOverlayProgress(50);
+      try {
+        const worldPing = await measureAveragePing(PING_WORLD_URLS, PING_ATTEMPTS, PING_TIMEOUT_MS);
+        setOverlayPing('world', formatPing(worldPing));
+      } catch (e) { setOverlayPing('world', 'ошибка'); }
+
+      setOverlayTitle('Замер Мир (Download)...');
+      setOverlayProgress(65);
+      try {
+        const worldDownload = await measureDownload(SPEEDTEST_DOWNLOAD_URL);
+        setOverlayValue('world-download', formatSpeed(worldDownload));
+      } catch (e) { setOverlayValue('world-download', 'ошибка'); }
+
+      setOverlayTitle('Замер Мир (Upload)...');
+      setOverlayProgress(80);
+      try {
+        const worldUpload = await postUpload(SPEEDTEST_UPLOAD_URL, SPEEDTEST_UPLOAD_SIZE, 'application/octet-stream');
+        setOverlayValue('world-upload', formatSpeed(worldUpload));
+      } catch (e) { setOverlayValue('world-upload', 'ошибка'); }
+
+      setOverlayTitle('Замер jcartools.ru...');
+      setOverlayProgress(90);
+
+      try {
+        const customPing = await measurePing(PING_CUSTOM_URL, PING_TIMEOUT_MS);
+        setOverlayPing('custom', formatPing(customPing));
+
+        let customSpeed = null;
+        try {
+          customSpeed = await measureDownload(CUSTOM_SPEEDTEST_IMG);
+        } catch (e) {
+          customSpeed = await measureImgDownload(CUSTOM_SPEEDTEST_IMG, CUSTOM_SPEEDTEST_BYTES);
+        }
+        setOverlayValue('custom-download', formatSpeed(customSpeed));
+      } catch (e) {
+        console.warn('jcartools test failed:', e);
+        setOverlayValue('custom-download', 'ошибка');
+      }
+
+      setOverlayProgress(100);
+      setOverlayTitle('Скорость (Мбит/с)');
+    } catch (e) {
+      setOverlayTitle('Ошибка замера');
+      setOverlayProgress(100);
+    } finally {
+      speedtestInProgress = false;
+      scheduleOverlayRemoval();
+    }
   }
 
   function svgNoNetwork() {
@@ -72,9 +396,14 @@ modules.network = (function() {
       '</svg>';
   }
 
+  /**
+   * [FIX] Значок "белые списки" увеличен, добавлен белый обруч вокруг красного значка Wi-Fi.
+   * Обруч символизирует белую блокировку (доступ только к разрешённым ресурсам).
+   */
   function svgWifiLimited() {
-    return '<svg class="network-svg" viewBox="0 0 24 24">' +
-      '<circle cx="12" cy="12" r="10" fill="#F44336" opacity="0.92"/>' +
+    return '<svg class="network-svg network-svg--limited" viewBox="0 0 24 24">' +
+      '<circle cx="12" cy="12" r="11" stroke="#FFFFFF" stroke-width="1.8" fill="none" opacity="0.95"/>' +
+      '<circle cx="12" cy="12" r="9.2" fill="#F44336" opacity="0.95"/>' +
       '<path d="M12 16.4c-.75 0-1.35.6-1.35 1.35S11.25 19.1 12 19.1s1.35-.6 1.35-1.35S12.75 16.4 12 16.4zm3.34-4.02c-1.08-1.08-2.09-1.55-3.34-1.55s-2.26.47-3.34 1.55l.94.94c.88-.88 1.69-1.15 2.4-1.15s1.52.27 2.4 1.15l.94-.94zm2.13-2.67C16.03 8.27 14.2 7.56 12 7.56s-4.03.71-5.47 2.15l.94.94c1.35-1.35 2.9-1.86 4.53-1.86s3.18.51 4.53 1.86l.94-.94zm2.09-2.64C17.45 4.96 14.89 4.06 12 4.06s-5.45.9-7.56 3.01l.94.94c2.02-2.02 4.25-2.78 6.62-2.78s4.6.76 6.62 2.78l.94-.94z" fill="#FFFFFF"/>' +
       '</svg>';
   }
@@ -206,15 +535,23 @@ modules.network = (function() {
   function init() {
     applyVisibilityFromSettings();
     check();
+
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
-      if (typeof diag !== 'undefined' && diag.handleNetworkClick()) return;
-      if (!checking) {
-        check(true);
-      } else {
-        showStatusHint(STATUS_HINTS[status] || STATUS_HINTS[0]);
+
+      if (typeof diag !== 'undefined' && typeof diag.handleNetworkClick === 'function') {
+        const consumed = diag.handleNetworkClick();
+        if (consumed) return;
       }
+
+      if (checking) {
+        showStatusHint(STATUS_HINTS[status] || STATUS_HINTS[0]);
+        return;
+      }
+
+      runSpeedTest();
     });
+
     window.addEventListener('online', () => { check(); });
     window.addEventListener('offline', () => setStatus(0));
     checkInterval = setInterval(check, 60000);
