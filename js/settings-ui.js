@@ -5,7 +5,7 @@
 modules.settingsUI = (function() {
   let modal = null;
   let isOpen = false;
-  let openSectionIndex = 0;
+  let openSectionIndex = -1;
 
   const SETTINGS_MODAL_ID = 'settingsModal';
   const SETTINGS_MODAL_CLASS = 'settings-modal-overlay';
@@ -62,6 +62,8 @@ modules.settingsUI = (function() {
   const QR_IMAGE_CLASS = 'qr-expanded-img';
   const QR_TEXT_CLASS = 'qr-expanded-text';
   const QR_OVERLAY_ACTIVE_CLASS = 'active';
+
+  const DEFAULT_OPEN_SECTION_KEY = 'about';
 
   function addQrModalStyles() {
     if (document.getElementById(QR_MODAL_STYLE_ID)) return;
@@ -423,12 +425,16 @@ modules.settingsUI = (function() {
     const currentAppVersion = (window.MANIFEST && window.MANIFEST.version) ? String(window.MANIFEST.version) : TEXT_VERSION_FALLBACK;
 
     const sections = [];
+    const sectionKeys = [];
     let sectionIndex = 0;
 
-    for (const [, category] of Object.entries(modules.settingsConfig.schema)) {
+    for (const [categoryKey, category] of Object.entries(modules.settingsConfig.schema)) {
+      sectionKeys.push(categoryKey);
+
       const section = document.createElement('div');
       section.className = SETTINGS_SECTION_CLASS;
       section.dataset.sectionIndex = String(sectionIndex);
+      section.dataset.sectionKey = categoryKey;
 
       const sectionTitle = document.createElement('h3');
       sectionTitle.className = SETTINGS_SECTION_TITLE_CLASS;
@@ -479,15 +485,9 @@ modules.settingsUI = (function() {
       sectionIndex++;
     }
 
-    if (sections.length > 0) {
-      sections[0].classList.add(SECTION_OPEN_CLASS);
-    }
-
     function scrollSectionIntoView(section) {
       if (!body || !section) return;
-      const bodyRect = body.getBoundingClientRect();
-      const sectionRect = section.getBoundingClientRect();
-      const target = body.scrollTop + (sectionRect.top - bodyRect.top);
+      const target = section.offsetTop - body.offsetTop;
       body.scrollTo({ top: Math.max(0, target), behavior: 'smooth' });
     }
 
@@ -500,7 +500,19 @@ modules.settingsUI = (function() {
         target.classList.add(SECTION_OPEN_CLASS);
         openSectionIndex = index;
         requestAnimationFrame(() => scrollSectionIntoView(target));
+      } else {
+        openSectionIndex = -1;
       }
+    }
+
+    // Открываем по умолчанию только секцию "О панели" (about).
+    const defaultOpenIndex = sectionKeys.indexOf(DEFAULT_OPEN_SECTION_KEY);
+    if (defaultOpenIndex >= 0 && sections[defaultOpenIndex]) {
+      sections[defaultOpenIndex].classList.add(SECTION_OPEN_CLASS);
+      openSectionIndex = defaultOpenIndex;
+      
+      // Скролл вниз к "О панели" при открытии убран. 
+      // Модалка откроется с самого верха (позиция 0), показывая первые вкладки.
     }
 
     const resetBtn = document.createElement('button');
