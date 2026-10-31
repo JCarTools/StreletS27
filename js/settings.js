@@ -61,6 +61,20 @@ modules.settings = (function() {
     return 'Ночь';
   }
 
+  function applyOpacity(value) {
+    const opacity = parseFloat(value);
+    if (isNaN(opacity)) return;
+    document.documentElement.style.setProperty('--widget-opacity', opacity);
+    storage.save('currentOpacity', opacity);
+    const widgets = document.querySelectorAll(
+      '.widget, .right-buttons, .widget-wrapper, #widgetNavigation, #networkWidgetWrapper'
+    );
+    widgets.forEach(el => {
+      el.style.opacity = opacity;
+      el.style.setProperty('--widget-opacity', opacity);
+    });
+  }
+
   function applySetting(key, value) {
     if (isApplyingSetting) return;
     isApplyingSetting = true;
@@ -242,14 +256,12 @@ modules.settings = (function() {
     }
   }
 
-  function applyOpacity(value) {
-    document.documentElement.style.setProperty('--widget-opacity', value);
-    storage.save('currentOpacity', value);
-  }
-
   function applyOpacityToNewElement(element) {
     if (!element) return;
-    element.style.setProperty('--widget-opacity', 'var(--widget-opacity, 1)');
+    const opacity = loadSetting('widgetOpacity');
+    const val = (opacity !== null && opacity !== undefined) ? parseFloat(opacity) : 1;
+    element.style.opacity = val;
+    element.style.setProperty('--widget-opacity', val);
   }
 
   function updateAppsSlotsCount(count) {
