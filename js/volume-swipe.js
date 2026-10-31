@@ -1,9 +1,6 @@
 /**********************************************
  * Модуль: Управление громкостью через свайп
  * [FIX] Баг #13: enabled синхронизирован с storage.
- * [FIX] Сброс состояния свайпа при потере фокуса (confirm, blur).
- * [FIX] Публичный метод resetSwipeState для вызова из main.js после confirm.
- * [FIX] mouseDownPos объявлен до resetSwipeState (устранён TDZ).
  **********************************************/
 
 modules.volumeSwipe = (function() {
@@ -18,7 +15,6 @@ modules.volumeSwipe = (function() {
   let enabled = true;
   let indicatorEl = null;
   let indicatorHideTimer = null;
-  let mouseDownPos = null; // объявлено ДО resetSwipeState
 
   const SWIPE_SENSITIVITY = 1.2;
   const MIN_MOVE_DISTANCE = 15;
@@ -29,8 +25,7 @@ modules.volumeSwipe = (function() {
     '.widget_player__volume_slider', '.climate_slot', '.app_slot', '.widget_buttons',
     '.brand-footer', '.close-btn', '.drawer-close', '.wallpaper-item',
     '.custom-wallpaper-btn', '.settings-modal-overlay', '.settings-toggle',
-    '.settings-range', '.settings-reset-btn', '.settings-close-btn', '.picker-item',
-    '.climate-temp-carousel', '#climate-temp-zone-left', '#climate-temp-zone-right'
+    '.settings-range', '.settings-reset-btn', '.settings-close-btn', '.picker-item'
   ];
 
   function isEnabled() {
@@ -121,13 +116,6 @@ modules.volumeSwipe = (function() {
     return null;
   }
 
-  function resetSwipeState() {
-    isSwiping = false;
-    hasMoved = false;
-    touchIdentifier = null;
-    mouseDownPos = null;
-  }
-
   function handleTouchStart(e) {
     if (!isEnabled()) return;
     if (shouldExclude(e.target)) return;
@@ -149,7 +137,9 @@ modules.volumeSwipe = (function() {
   function handleTouchMove(e) {
     if (!isEnabled() || !isSwiping) return;
     if (isOffMode()) {
-      resetSwipeState();
+      isSwiping = false;
+      hasMoved = false;
+      touchIdentifier = null;
       return;
     }
     if (e.touches) {
@@ -174,19 +164,22 @@ modules.volumeSwipe = (function() {
   }
 
   function handleTouchEnd() {
-    if (!isEnabled() || !isSwiping) {
-      resetSwipeState();
-      return;
-    }
+    if (!isEnabled() || !isSwiping) return;
     if (hasMoved && modules.volume && typeof modules.volume.getVolume === 'function') {
       currentVolume = modules.volume.getVolume();
     }
-    resetSwipeState();
+    isSwiping = false;
+    hasMoved = false;
+    touchIdentifier = null;
   }
 
   function handleTouchCancel() {
-    resetSwipeState();
+    isSwiping = false;
+    hasMoved = false;
+    touchIdentifier = null;
   }
+
+  let mouseDownPos = null;
 
   function handleMouseDown(e) {
     if (!isEnabled() || shouldExclude(e.target)) return;
@@ -204,11 +197,10 @@ modules.volumeSwipe = (function() {
   function handleMouseMove(e) {
     if (!isEnabled() || !isSwiping || touchIdentifier !== 'mouse') return;
     if (isOffMode()) {
-      resetSwipeState();
-      return;
-    }
-    if (!mouseDownPos) {
-      resetSwipeState();
+      isSwiping = false;
+      hasMoved = false;
+      touchIdentifier = null;
+      mouseDownPos = null;
       return;
     }
     const deltaX = Math.abs(e.clientX - mouseDownPos.x);
@@ -227,14 +219,14 @@ modules.volumeSwipe = (function() {
   }
 
   function handleMouseUp() {
-    if (!isSwiping) {
-      resetSwipeState();
-      return;
-    }
+    if (!isEnabled() || !isSwiping) return;
     if (hasMoved && modules.volume && typeof modules.volume.getVolume === 'function') {
       currentVolume = modules.volume.getVolume();
     }
-    resetSwipeState();
+    isSwiping = false;
+    hasMoved = false;
+    touchIdentifier = null;
+    mouseDownPos = null;
   }
 
   function handleWheel(e) {
@@ -255,12 +247,11 @@ modules.volumeSwipe = (function() {
   function setEnabled(value) {
     enabled = value !== false;
     if (!enabled) {
-      resetSwipeState();
+      isSwiping = false;
+      hasMoved = false;
+      touchIdentifier = null;
+      mouseDownPos = null;
     }
-  }
-
-  function handleWindowBlur() {
-    resetSwipeState();
   }
 
   let isInitialized = false;
@@ -272,7 +263,7 @@ modules.volumeSwipe = (function() {
     const settingEnabled = storage.load('setting_volumeSwipeEnabled');
     enabled = settingEnabled !== false;
 
-    document.addEventListener('touchstart', handleTouchStart, { passive: false });
+    document.addEventListener('touchstart', handleTouchStart, { passive: true });
     document.addEventListener('touchmove', handleTouchMove, { passive: false });
     document.addEventListener('touchend', handleTouchEnd);
     document.addEventListener('touchcancel', handleTouchCancel);
@@ -280,11 +271,6 @@ modules.volumeSwipe = (function() {
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
     document.addEventListener('wheel', handleWheel, { passive: false });
-
-    window.addEventListener('blur', handleWindowBlur);
-    document.addEventListener('visibilitychange', () => {
-      if (document.hidden) resetSwipeState();
-    });
 
     if (modules.volume && typeof modules.volume.subscribe === 'function') {
       modules.volume.subscribe((volume) => { currentVolume = volume; });
@@ -298,10 +284,15 @@ modules.volumeSwipe = (function() {
           newValue = raw === null ? true : JSON.parse(raw) !== false;
         } catch { newValue = raw !== 'false'; }
         enabled = newValue;
-        if (!enabled) resetSwipeState();
+        if (!enabled) {
+          isSwiping = false;
+          hasMoved = false;
+          touchIdentifier = null;
+          mouseDownPos = null;
+        }
       }
     });
   }
 
-  return { init, setEnabled, resetSwipeState };
+  return { init, setEnabled };
 })();

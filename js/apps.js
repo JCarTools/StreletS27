@@ -1,6 +1,7 @@
 /**********************************************
  * Модуль: Приложения
  * [FIX] Баг #11: перед makeLongPressable снимаем старые обработчики longpress.
+ * [FIX] Безопасный рендеринг DOM без использования innerHTML для защиты от XSS.
  **********************************************/
 
 modules.apps = (function() {
@@ -60,7 +61,11 @@ modules.apps = (function() {
           const slotEl = document.querySelector(`.app_slot[data-slot="${currentPickerSlot}"]`);
           if (slotEl) {
             slotEl.setAttribute('data-app-name', app.name);
-            slotEl.innerHTML = `<img src="data:image/png;base64,${app.icon}">`;
+            slotEl.textContent = ''; // Очищаем содержимое безопасно
+            
+            const slotImg = document.createElement('img');
+            slotImg.src = `data:image/png;base64,${app.icon}`;
+            slotEl.appendChild(slotImg);
             
             const showLabels = storage.load('setting_showAppLabels');
             if (showLabels) {
@@ -69,6 +74,8 @@ modules.apps = (function() {
               labelSpan.textContent = app.name;
               slotEl.appendChild(labelSpan);
               slotEl.classList.add('has-label');
+            } else {
+              slotEl.classList.remove('has-label');
             }
           }
           
@@ -85,13 +92,20 @@ modules.apps = (function() {
     const slotId = slotElement.dataset.slot;
     const saved = storage.load(`app_slot_${slotId}`);
     
+    slotElement.textContent = ''; // Очищаем содержимое безопасно
+    
     if (!saved) {
-      slotElement.innerHTML = '<span style="font-size:1.5rem;opacity:0.5;">+</span>';
+      const placeholder = document.createElement('span');
+      placeholder.style.cssText = 'font-size:1.5rem;opacity:0.5;';
+      placeholder.textContent = '+';
+      slotElement.appendChild(placeholder);
       slotElement.classList.remove('has-label');
       return;
     }
     
-    slotElement.innerHTML = `<img src="data:image/png;base64,${saved.icon}">`;
+    const img = document.createElement('img');
+    img.src = `data:image/png;base64,${saved.icon}`;
+    slotElement.appendChild(img);
     slotElement.setAttribute('data-app-name', saved.name);
     
     const showLabels = storage.load('setting_showAppLabels');
@@ -153,7 +167,6 @@ modules.apps = (function() {
       
       slot._clickHandler = clickHandler;
       slot.addEventListener('click', clickHandler);
-      // makeLongPressable сам снимает старые обработчики через _lpHandlers.teardown()
       makeLongPressable(slot, longPressHandler, { delay: 700, preventDefaultOnStart: false });
     });
   }

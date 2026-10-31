@@ -1,20 +1,5 @@
 /**********************************************
  * My Black Window - Dashboard
- * [FIX] Баг #8: двойной тап работает и в не-video режиме.
- * [FIX] Баг #15: attachOemTouchFeedback для новых слотов.
- * [FIX] После onJsReady — принудительно применяем тему мини-карты.
- * [FIX] Синхронизация двойного тапа и долгого нажатия (не считаем long-press двойным тапом).
- * [FIX] Обработчик клика по фону не срабатывает после long-press.
- * [FIX] isBackgroundElement учитывает зоны температуры и карусель.
- * [NEW] Настройки разделены: settings.js (модалка) + sidebar-settings.js (аккордеон).
- * [NEW] EventBus: централизованная маршрутизация onAndroidEvent.
- * [NEW] Модуль climate-temp: свайп-регулировка температуры.
- * [NEW] Закрытие сайдбара по тапу на подложку (sidebarOverlay).
- * [NEW] Модуль widgets-reorder: перестановка виджетов по горизонтали.
- * [NEW] Долгое нажатие на фон — сохранение текущих обоев в «Ваши обои».
- * [FIX] Сброс состояния volume-swipe после confirm.
- * [FIX] При закрытии сайдбара аккордеон автосмены всегда сворачивается.
- * [NEW] Вызов modules.onboarding.init() с задержкой в initUI.
  **********************************************/
 
 (function installModuleEventBindings() {
@@ -81,39 +66,64 @@ function isBackgroundElement(target) {
   return true;
 }
 
-let lastTapTime = 0;
-let lastTapX = 0;
-let lastTapY = 0;
-const DOUBLE_TAP_WINDOW_MS = 300;
-const DOUBLE_TAP_DISTANCE_PX = 40;
-
-/* Общий флаг, чтобы long-press не превратился в двойной тап. */
 let bgLongPressTriggered = false;
+let bgLongPressTimer = null;
+let bgLongPressStartX = 0;
+let bgLongPressStartY = 0;
+let bgLongPressMoved = false;
 
-function handleTouchStart(e) {
-  const doubleTapEnabled = storage.load('setting_doubleTapToHideWidgets');
-  if (!doubleTapEnabled) return;
-  if (bgLongPressTriggered) return;
+function handleBackgroundLongPressStart(e) {
   if (!isBackgroundElement(e.target)) return;
-  if (!e.touches || e.touches.length !== 1) return;
+  if (document.body.classList.contains('off-mode')) return;
+  if (document.body.classList.contains('widgets-hidden')) return;
+  if (e.touches && e.touches.length !== 1) return;
 
-  const touch = e.touches[0];
-  const now = Date.now();
-  const dx = touch.clientX - lastTapX;
-  const dy = touch.clientY - lastTapY;
-  const distance = Math.sqrt(dx * dx + dy * dy);
+  const point = e.touches ? e.touches[0] : e;
+  if (!point) return;
 
-  if (now - lastTapTime < DOUBLE_TAP_WINDOW_MS && distance < DOUBLE_TAP_DISTANCE_PX) {
-    if (e.cancelable) e.preventDefault();
-    e.stopPropagation();
-    document.body.classList.toggle('widgets-hidden');
-    lastTapTime = 0;
-    return;
+  bgLongPressStartX = point.clientX;
+  bgLongPressStartY = point.clientY;
+  bgLongPressTriggered = false;
+  bgLongPressMoved = false;
+
+  bgLongPressTimer = setTimeout(() => {
+    if (bgLongPressMoved) return;
+    bgLongPressTriggered = true;
+    if (navigator.vibrate) {
+      try { navigator.vibrate(20); } catch (err) {}
+    }
+    const shouldSave = confirm('Сохранить текущие обои в «Ваши обои»?');
+    if (shouldSave) {
+      if (modules.wallpaper && typeof modules.wallpaper.saveCurrentAsUserWallpaper === 'function') {
+        modules.wallpaper.saveCurrentAsUserWallpaper();
+      }
+    }
+    setTimeout(() => { bgLongPressTriggered = false; }, 100);
+  }, 1400); 
+}
+
+function handleBackgroundLongPressMove(e) {
+  if (!bgLongPressTimer) return;
+  const point = e.touches ? e.touches[0] : e;
+  if (!point) return;
+  const dx = Math.abs(point.clientX - bgLongPressStartX);
+  const dy = Math.abs(point.clientY - bgLongPressStartY);
+  if (dx > 10 || dy > 10) {
+    bgLongPressMoved = true;
+    clearTimeout(bgLongPressTimer);
+    bgLongPressTimer = null;
   }
+}
 
-  lastTapTime = now;
-  lastTapX = touch.clientX;
-  lastTapY = touch.clientY;
+function handleBackgroundLongPressEnd(e) {
+  if (bgLongPressTimer) {
+    clearTimeout(bgLongPressTimer);
+    bgLongPressTimer = null;
+  }
+  if (bgLongPressTriggered && e && e.cancelable) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
 }
 
 let isReady = false;
@@ -191,7 +201,6 @@ function forceResetSwipe() {
   }
 }
 
-// Универсальная функция закрытия сайдбара
 function closeSidebar() {
   const sidebar = document.getElementById("sidebar");
   const sidebarOverlay = document.getElementById("sidebarOverlay");
@@ -202,49 +211,12 @@ function closeSidebar() {
   }
 }
 
-let bgLongPressTimer = null;
-
-function handleBackgroundLongPressStart(e) {
-  if (!isBackgroundElement(e.target)) return;
-  if (document.body.classList.contains('off-mode')) return;
-  if (document.body.classList.contains('widgets-hidden')) return;
-  if (e.touches && e.touches.length !== 1) return;
-
-  bgLongPressTriggered = false;
-
-  // Сбрасываем таймер двойного тапа, чтобы long-press не считался первым тапом.
-  lastTapTime = 0;
-
-  bgLongPressTimer = setTimeout(() => {
-    bgLongPressTriggered = true;
-    // Сбрасываем таймер двойного тапа после long-press
-    lastTapTime = 0;
-    forceResetSwipe();
-    if (navigator.vibrate) {
-      try { navigator.vibrate(20); } catch (err) {}
-    }
-    const shouldSave = confirm('Сохранить текущие обои в «Ваши обои»?');
-    forceResetSwipe();
-    if (shouldSave) {
-      if (modules.wallpaper && typeof modules.wallpaper.saveCurrentAsUserWallpaper === 'function') {
-        modules.wallpaper.saveCurrentAsUserWallpaper();
-      }
-    }
-    // Сбрасываем флаг через короткую задержку — чтобы клик после отпускания не сработал
-    setTimeout(() => { bgLongPressTriggered = false; }, 100);
-  }, 700);
-}
-
-function handleBackgroundLongPressEnd(e) {
-  if (bgLongPressTimer) {
-    clearTimeout(bgLongPressTimer);
-    bgLongPressTimer = null;
-  }
-  if (bgLongPressTriggered && e && e.cancelable) {
-    e.preventDefault();
-  }
-  forceResetSwipe();
-}
+let bgClickTimer = null;
+let lastClickTime = 0;
+let lastClickX = 0;
+let lastClickY = 0;
+const DOUBLE_CLICK_MS = 300;
+const DOUBLE_CLICK_DIST = 40;
 
 async function initUI() {
   if (typeof diag !== 'undefined') diag.init();
@@ -276,7 +248,6 @@ async function initUI() {
   if (modules.climateTemp) modules.climateTemp.init();
   if (modules.widgetsReorder) modules.widgetsReorder.init();
 
-  // Инициализация онбординга с задержкой (чтобы панель успела отрисоваться)
   if (modules.onboarding) {
     setTimeout(() => {
       modules.onboarding.init();
@@ -309,7 +280,6 @@ async function initUI() {
 
   document.body.addEventListener("click", (e) => {
     if (modules.weather) modules.weather.fetchWeather();
-
     if (bgLongPressTriggered) return;
 
     if (document.body.classList.contains('off-mode')) {
@@ -331,8 +301,6 @@ async function initUI() {
       return;
     }
 
-    const tapToChangeEnabled = storage.load('setting_tapToChangeWallpaper');
-    if (tapToChangeEnabled === false) return;
     if (!isBackgroundElement(e.target)) return;
 
     if (document.body.classList.contains('widgets-hidden')) {
@@ -340,30 +308,66 @@ async function initUI() {
        return;
     }
 
-    if (modules.wallpaper && modules.wallpaper.isVideoMode && modules.wallpaper.isVideoMode()) {
-      toggleWidgetsVisibility();
+    const doubleTapEnabled = storage.load('setting_doubleTapToHideWidgets') === true;
+    const tapToChangeEnabled = storage.load('setting_tapToChangeWallpaper') !== false;
+
+    if (doubleTapEnabled) {
+      const now = Date.now();
+      const dx = e.clientX - lastClickX;
+      const dy = e.clientY - lastClickY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      if (now - lastClickTime < DOUBLE_CLICK_MS && dist < DOUBLE_CLICK_DIST) {
+        clearTimeout(bgClickTimer);
+        bgClickTimer = null;
+        lastClickTime = 0;
+        toggleWidgetsVisibility();
+        return;
+      }
+
+      lastClickTime = now;
+      lastClickX = e.clientX;
+      lastClickY = e.clientY;
+
+      bgClickTimer = setTimeout(() => {
+        lastClickTime = 0;
+        if (tapToChangeEnabled) {
+          if (modules.wallpaper && modules.wallpaper.isVideoMode && modules.wallpaper.isVideoMode()) {
+            toggleWidgetsVisibility();
+          } else {
+            changeWallpaper();
+          }
+        }
+      }, DOUBLE_CLICK_MS);
+
     } else {
-      changeWallpaper();
+      if (tapToChangeEnabled) {
+        if (modules.wallpaper && modules.wallpaper.isVideoMode && modules.wallpaper.isVideoMode()) {
+          toggleWidgetsVisibility();
+        } else {
+          changeWallpaper();
+        }
+      }
     }
   });
-
-  document.body.addEventListener("touchstart", handleTouchStart, { passive: false });
 
   document.body.addEventListener("touchstart", handleBackgroundLongPressStart, { passive: true });
   document.body.addEventListener("touchend", handleBackgroundLongPressEnd);
   document.body.addEventListener("touchcancel", handleBackgroundLongPressEnd);
-  document.body.addEventListener("touchmove", handleBackgroundLongPressEnd, { passive: true });
+  document.body.addEventListener("touchmove", handleBackgroundLongPressMove, { passive: true });
   document.body.addEventListener("mousedown", handleBackgroundLongPressStart);
   document.body.addEventListener("mouseup", handleBackgroundLongPressEnd);
+  document.body.addEventListener("mousemove", handleBackgroundLongPressMove);
   document.body.addEventListener("mouseleave", handleBackgroundLongPressEnd);
 
   window.addEventListener('blur', forceResetSwipe);
   window.addEventListener('focus', forceResetSwipe);
 
+  const sidebar = document.getElementById("sidebar");
+  const sidebarOverlay = document.getElementById("sidebarOverlay");
+
   document.getElementById("openSidebar")?.addEventListener("click", (e) => {
     e.stopPropagation();
-    const sidebar = document.getElementById("sidebar");
-    const sidebarOverlay = document.getElementById("sidebarOverlay");
     sidebar?.classList.add("open");
     if (sidebarOverlay) sidebarOverlay.classList.add("visible");
 
@@ -377,17 +381,46 @@ async function initUI() {
     closeSidebar();
   });
 
-  document.getElementById("sidebarOverlay")?.addEventListener("click", () => {
-    closeSidebar();
-  });
+  // Закрытие только по оверлею (фон вне сайдбара)
+  if (sidebarOverlay) {
+    sidebarOverlay.addEventListener("click", () => {
+      closeSidebar();
+    });
+  }
 
   document.getElementById('presetVideoKamin')?.addEventListener('click', (e) => {
     e.stopPropagation();
     if (modules.wallpaper && modules.wallpaper.setVideoBackground) {
-      modules.wallpaper.setVideoBackground({ preset: 'kamin' });
+      modules.wallpaper.setVideoBackground('images/kaminHD.mp4');
     }
     closeSidebar();
   });
+
+  const btnSaveCurrentWallpaper = document.getElementById('btnSaveCurrentWallpaper');
+  if (btnSaveCurrentWallpaper) {
+    if (btnSaveCurrentWallpaper._saveHandler) {
+      btnSaveCurrentWallpaper.removeEventListener('click', btnSaveCurrentWallpaper._saveHandler);
+    }
+    const saveHandler = async (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      if (!modules.wallpaper || typeof modules.wallpaper.saveCurrentAsUserWallpaper !== 'function') {
+        if (typeof showToast === 'function') showToast('Модуль обоев не загружен', 2000);
+        return;
+      }
+      try {
+        await modules.wallpaper.saveCurrentAsUserWallpaper();
+      } catch (err) {
+        console.warn('[Main] saveCurrentAsUserWallpaper error:', err);
+        if (typeof showToast === 'function') showToast('Ошибка сохранения обоев', 2500);
+      }
+    };
+    btnSaveCurrentWallpaper._saveHandler = saveHandler;
+    btnSaveCurrentWallpaper.addEventListener('click', saveHandler);
+    if (typeof attachOemTouchFeedback === 'function') {
+      attachOemTouchFeedback(btnSaveCurrentWallpaper);
+    }
+  }
 
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden) {
@@ -410,12 +443,7 @@ async function initUI() {
   });
 
   document.addEventListener("contextmenu", e => e.preventDefault());
-
-  // Сообщаем Android о готовности и принудительно применяем тему мини-карты
-  try {
-    if (typeof android.onJsReady === 'function') android.onJsReady();
-    else if (typeof android.call === 'function') android.call('onJsReady');
-  } catch (e) { /* noop */ }
+  if (typeof android.onJsReady === 'function') android.onJsReady();
 
   setTimeout(() => {
     if (modules.navigation && typeof modules.navigation.applyThemeNow === 'function') {

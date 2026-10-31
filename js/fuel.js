@@ -1,6 +1,7 @@
 /**********************************************
  * Модуль: Топливо и АКБ
  * [FIX] Точный парсинг под формат моста.
+ * [FIX] Использование toFixed(1) для предотвращения ошибок округления JS.
  **********************************************/
 
 modules.fuel = (function() {
@@ -29,7 +30,8 @@ modules.fuel = (function() {
       } else {
         if (getDisplayMode() === 'liters') {
           const liters = fuelPercent * getTankSize() / 100;
-          elFuelValue.textContent = String(Math.round(liters * 10) / 10);
+          // ИСПОЛЬЗУЕМ toFixed(1) ВМЕСТО Math.round
+          elFuelValue.textContent = liters.toFixed(1);
           elFuelUnit.textContent = 'л';
         } else {
           elFuelValue.textContent = String(Math.round(fuelPercent));

@@ -1,18 +1,11 @@
 /**********************************************
  * Модуль: Перестановка виджетов по горизонтали
- * [NEW] Drag-and-drop для виджетов в .dashboard.
- * [FIX] Отменена блокировка перетаскивания климата и правых кнопок.
- * [FIX] Улучшен алгоритм вставки на крайние позиции (самый левый/правый).
- * [NEW] Порядок сохраняется в localStorage (widgetOrder).
- * [NEW] Скрытые виджеты сохраняют позицию и возвращаются при включении.
- * [NEW] Поддержка touch и mouse.
- * [NEW] Не конфликтует с обычными кликами (порог срабатывания 8px).
  **********************************************/
 
 modules.widgetsReorder = (function() {
   const STORAGE_KEY = 'widgetOrder';
-  const HOLD_DELAY_MS = 200;        // задержка перед стартом перетаскивания
-  const MOVE_THRESHOLD_PX = 8;      // порог движения для старта drag
+  const HOLD_DELAY_MS = 200;
+  const MOVE_THRESHOLD_PX = 8;
   const ANIMATION_MS = 180;
 
   const dashboard = document.querySelector('.dashboard');
@@ -20,13 +13,10 @@ modules.widgetsReorder = (function() {
     return { init() {}, destroy() {}, refresh() {} };
   }
 
-  // Все виджеты (включая скрытые). Порядок по умолчанию — как в HTML.
   let allWidgets = [];
   let dragState = null;
   let initialized = false;
   let longPressTimer = null;
-
-  // ---------- Утилиты ----------
 
   function isWidgetElement(el) {
     if (!el || !el.classList) return false;
@@ -70,29 +60,43 @@ modules.widgetsReorder = (function() {
     storage.save(STORAGE_KEY, ids);
   }
 
-  // ---------- Применение сохранённого порядка ----------
+  // Очищает сохранённый порядок от ID, которых нет в текущем DOM,
+  // и добавляет новые ID в конец. Возвращает актуальный массив ID.
+  function sanitizeOrder() {
+    const saved = getSavedOrder();
+    const currentIds = collectAllWidgets().map(getWidgetId).filter(Boolean);
+    const currentSet = new Set(currentIds);
+    const result = [];
+
+    for (const id of saved) {
+      if (currentSet.has(id) && !result.includes(id)) {
+        result.push(id);
+      }
+    }
+    for (const id of currentIds) {
+      if (!result.includes(id)) result.push(id);
+    }
+    if (result.length !== saved.length || result.some((v, i) => v !== saved[i])) {
+      saveOrder(result);
+    }
+    return result;
+  }
 
   function applySavedOrder() {
-    const saved = getSavedOrder();
-    if (!saved.length) return;
-
-    const movable = allWidgets.slice();
+    const order = sanitizeOrder();
+    if (!order.length) return;
+    const movable = collectAllWidgets();
     const orderIndex = new Map();
-    saved.forEach((id, idx) => orderIndex.set(id, idx));
-
-    // Сортируем все виджеты согласно сохраненному порядку
+    order.forEach((id, idx) => orderIndex.set(id, idx));
     movable.sort((a, b) => {
-      const ia = orderIndex.has(getWidgetId(a)) ? orderIndex.get(getWidgetId(a)) : 9999;
-      const ib = orderIndex.has(getWidgetId(b)) ? orderIndex.get(getWidgetId(b)) : 9999;
+      const ia = orderIndex.has(getWidgetId(a)) ? orderIndex.get(getWidgetId(a)) : 99999;
+      const ib = orderIndex.has(getWidgetId(b)) ? orderIndex.get(getWidgetId(b)) : 99999;
       return ia - ib;
     });
-
     movable.forEach(el => {
       dashboard.appendChild(el);
     });
   }
-
-  // ---------- Drag logic ----------
 
   function getDragCandidates() {
     return Array.from(dashboard.children).filter(el => {
@@ -175,19 +179,16 @@ modules.widgetsReorder = (function() {
       dragState.dropTarget = target;
       dragState.dropBefore = before;
     } else {
-      // Если мы не над другим виджетом, проверяем, не ушли ли мы за край
       const candidates = getDragCandidates().filter(el => el !== dragState.widget);
       if (candidates.length > 0) {
         const firstRect = candidates[0].getBoundingClientRect();
         const lastRect = candidates[candidates.length - 1].getBoundingClientRect();
         
         if (clientX < firstRect.left + firstRect.width / 2) {
-          // Ставим перед первым
           setDropIndicator(candidates[0], true);
           dragState.dropTarget = candidates[0];
           dragState.dropBefore = true;
         } else if (clientX > lastRect.left + lastRect.width / 2) {
-          // Ставим после последнего
           setDropIndicator(candidates[candidates.length - 1], false);
           dragState.dropTarget = candidates[candidates.length - 1];
           dragState.dropBefore = false;
@@ -238,8 +239,6 @@ modules.widgetsReorder = (function() {
     const ids = movable.map(el => getWidgetId(el)).filter(Boolean);
     saveOrder(ids);
   }
-
-  // ---------- Touch ----------
 
   function onTouchStart(e) {
     if (!initialized) return;
@@ -308,8 +307,6 @@ modules.widgetsReorder = (function() {
     }
   }
 
-  // ---------- Mouse ----------
-
   function onMouseDown(e) {
     if (!initialized) return;
     if (e.button !== 0) return;
@@ -360,8 +357,6 @@ modules.widgetsReorder = (function() {
     }
   }
 
-  // ---------- Init / destroy ----------
-
   function attachEvents() {
     document.addEventListener('touchstart', onTouchStart, { passive: true });
     document.addEventListener('touchmove', onTouchMove, { passive: false });
@@ -394,6 +389,7 @@ modules.widgetsReorder = (function() {
 
     assignDefaultIds();
     allWidgets = collectAllWidgets();
+    sanitizeOrder();
     applySavedOrder();
 
     attachEvents();

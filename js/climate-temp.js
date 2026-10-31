@@ -1,27 +1,8 @@
 /**********************************************
  * Модуль: Регулировка температуры климата свайпом
- * [NEW] Свайп по левой/правой зоне экрана → ±шаг
- * [NEW] Крупные полупрозрачные цифры в режиме покоя
- * [NEW] Карусель (wheel picker) по клику на цифру
- * [NEW] Обратная связь из carData (driverTemp/passengerTemp)
- * [NEW] Оптимистичные обновления + откат при ошибке
- * [FIX] Шаг температуры = 1°C
- * [FIX] Зона свайпа ограничена областью обоев (не перекрывает виджеты)
- * [FIX] Прозрачность цифр настраивается через --climate-temp-opacity
- * [NEW] Добавлен значок градуса к цифрам температуры
- * [NEW] Добавлена кнопка синхронизации климата в карусель
- * [FIX] Исправлен сдвиг цифр от краев экрана
- * [NEW] Добавлена настройка размера шрифта температуры
- * [FIX] Синхронизация теперь использует строго requestCarCommandAsync и ждет ответа
- * [FIX] applyTempOptimistic больше не рекурсирует при SYNC (флаг skipSync)
- * [FIX] onStart зоны проверяет elementFromPoint до включения tracking
- * [FIX] pollClimateState использует универсальный android.requestCarCommandAsync
- * [FIX] Кнопка "Синхронно" теперь срабатывает с первого раза (pointerdown/up + disabled)
- * [FIX] state.syncPending сбрасывается в finally, даже при ошибке
  **********************************************/
 
 modules.climateTemp = (function() {
-  // ---------- Константы ----------
   const STEP = 1;
   const MIN_TEMP = 16;
   const MAX_TEMP = 30;
@@ -29,7 +10,7 @@ modules.climateTemp = (function() {
   const POLL_INTERVAL_MS = 5000;
   const SWIPE_THRESHOLD_PX = 25;
   const SWIPE_STEP_PX = 50;
-  const CAROUSEL_ITEM_HEIGHT = 4.5; // rem
+  const CAROUSEL_ITEM_HEIGHT = 4.5;
   const CAROUSEL_EXTRA_STEPS = 3;
   const SYNC_REQUEST_TIMEOUT_MS = 2500;
 
@@ -44,7 +25,6 @@ modules.climateTemp = (function() {
     passengerDown: 'Passenger_Temp_Down'
   };
 
-  // ---------- Состояние ----------
   const state = {
     driverTemp: null,
     passengerTemp: null,
@@ -52,7 +32,8 @@ modules.climateTemp = (function() {
     syncPending: false,
     optimistic: Object.create(null),
     enabled: true,
-    initialized: false
+    initialized: false,
+    disablingSync: false
   };
 
   let zoneLeft = null;
@@ -62,7 +43,6 @@ modules.climateTemp = (function() {
   let carouselAnimating = false;
   let pollTimer = null;
 
-  // ---------- Утилиты ----------
   function normalizeTemp(value) {
     const n = Number(value);
     if (!Number.isFinite(n)) return null;
@@ -111,7 +91,42 @@ modules.climateTemp = (function() {
     return false;
   }
 
-  // ---------- Создание зон ----------
+  async function ensureSyncDisabled() {
+    if (!state.syncEnabled) return true;
+    if (state.disablingSync) {
+      return new Promise(resolve => {
+        const check = setInterval(() => {
+          if (!state.disablingSync) {
+            clearInterval(check);
+            resolve(!state.syncEnabled);
+          }
+        }, 100);
+        setTimeout(() => { clearInterval(check); resolve(!state.syncEnabled); }, SYNC_REQUEST_TIMEOUT_MS + 500);
+      });
+    }
+    state.disablingSync = true;
+    let ok = false;
+    try {
+      const res = await android.requestCarCommandAsync(
+        { cmd: 'climate_set_sync', value: false },
+        SYNC_REQUEST_TIMEOUT_MS
+      );
+      if (res && (res.success === true || res.status === 'ok')) {
+        state.syncEnabled = false;
+        ok = true;
+        if (carouselOverlay) {
+          const btn = carouselOverlay.querySelector('.climate-temp-carousel__sync-btn');
+          if (btn) btn.classList.remove('active');
+        }
+      }
+    } catch (e) {
+      console.warn('[ClimateTemp] ensureSyncDisabled error:', e);
+    } finally {
+      state.disablingSync = false;
+    }
+    return ok || !state.syncEnabled;
+  }
+
   function createZone(side) {
     const zone = document.createElement('div');
     zone.id = side === 'driver' ? ZONE_LEFT_ID : ZONE_RIGHT_ID;
@@ -136,7 +151,31 @@ modules.climateTemp = (function() {
     return zone;
   }
 
-  // ---------- Свайп ----------
+  /**
+   * Логика изменения температуры:
+   *  - sync + driver: меняем обе стороны, sync не трогаем.
+   *  - sync + passenger: сначала выключаем sync, потом меняем только пассажира.
+   *  - no sync: меняем только выбранную сторону.
+   */
+  function requestTempChange(side, targetTemp) {
+    if (targetTemp === null || !Number.isFinite(targetTemp)) return;
+    const clamped = clampTemp(Math.round(targetTemp));
+
+    if (side === 'passenger' && state.syncEnabled) {
+      ensureSyncDisabled().then(ok => {
+        if (ok) applyTempOptimistic('passenger', clamped, true);
+      });
+      return;
+    }
+
+    if (side === 'driver' && state.syncEnabled) {
+      applyTempOptimistic('driver', clamped, false);
+      return;
+    }
+
+    applyTempOptimistic(side, clamped, true);
+  }
+
   function attachSwipeHandlers(zone, side) {
     let startY = 0;
     let startX = 0;
@@ -182,16 +221,9 @@ modules.climateTemp = (function() {
         const steps = Math.trunc(dy / SWIPE_STEP_PX);
         if (steps !== 0 && startTemp !== null) {
           const target = clampTemp(startTemp + (-steps) * STEP);
-          applyTempOptimistic(side, target, false);
+          requestTempChange(side, target);
           startTemp = target;
           startY = point.clientY;
-          if (state.syncEnabled) {
-            const other = side === 'driver' ? 'passenger' : 'driver';
-            if (other === 'driver') state.driverTemp = target;
-            else state.passengerTemp = target;
-            state.optimistic[other] = { value: target, until: Date.now() + OPTIMISTIC_MS };
-            renderZone(other);
-          }
         }
       }
     };
@@ -216,7 +248,11 @@ modules.climateTemp = (function() {
     window.addEventListener('mouseup', onEnd);
   }
 
-  // ---------- Применение температуры ----------
+  /**
+   * @param {string} side - 'driver' | 'passenger'
+   * @param {number} targetTemp
+   * @param {boolean} skipSync - если true, не копировать на противоположную сторону
+   */
   function applyTempOptimistic(side, targetTemp, skipSync) {
     if (targetTemp === null || !Number.isFinite(targetTemp)) return;
     const clamped = clampTemp(Math.round(targetTemp));
@@ -247,7 +283,6 @@ modules.climateTemp = (function() {
     }
   }
 
-  // ---------- Рендер зоны ----------
   function renderZone(side) {
     const zone = side === 'driver' ? zoneLeft : zoneRight;
     if (!zone) return;
@@ -272,7 +307,6 @@ modules.climateTemp = (function() {
     zone.classList.toggle('climate-temp-zone--empty', temp === null);
   }
 
-  // ---------- Карусель ----------
   function buildCarouselValues() {
     const values = [];
     const start = MIN_TEMP - CAROUSEL_EXTRA_STEPS * STEP;
@@ -302,65 +336,54 @@ modules.climateTemp = (function() {
     return 0;
   }
 
-  /**
-   * Универсальный клик-хендлер для Android WebView.
-   * Использует pointerdown/pointerup с защитой от "фантомных" кликов.
-   */
-  function attachPressHandler(el, handler) {
-    let pressed = false;
-    let startX = 0;
-    let startY = 0;
-    const MOVE_CANCEL_PX = 12;
+  async function setSync(newState, syncBtn, syncTextSpan) {
+    if (state.syncPending) return;
+    state.syncPending = true;
+    if (syncBtn) {
+      syncBtn.classList.add('pending');
+      syncBtn.disabled = true;
+    }
+    if (syncTextSpan) syncTextSpan.textContent = 'Отправка...';
 
-    const onDown = (e) => {
-      if (e.button !== undefined && e.button !== 0) return;
-      const point = e.touches ? e.touches[0] : e;
-      if (point) { startX = point.clientX; startY = point.clientY; }
-      pressed = true;
-      el.classList.add('is-pressed');
-    };
-
-    const onMove = (e) => {
-      if (!pressed) return;
-      const point = e.touches ? e.touches[0] : e;
-      if (!point) return;
-      const dx = point.clientX - startX;
-      const dy = point.clientY - startY;
-      if (Math.sqrt(dx * dx + dy * dy) > MOVE_CANCEL_PX) {
-        pressed = false;
-        el.classList.remove('is-pressed');
+    let success = false;
+    try {
+      const res = await android.requestCarCommandAsync(
+        { cmd: 'climate_set_sync', value: newState },
+        SYNC_REQUEST_TIMEOUT_MS
+      );
+      if (res && (res.success === true || res.status === 'ok')) {
+        success = true;
       }
-    };
-
-    const onUp = (e) => {
-      if (!pressed) {
-        el.classList.remove('is-pressed');
-        return;
+    } catch (err) {
+      console.warn('[ClimateTemp] Sync error:', err);
+    } finally {
+      state.syncPending = false;
+      if (syncBtn) {
+        syncBtn.classList.remove('pending');
+        syncBtn.disabled = false;
       }
-      pressed = false;
-      el.classList.remove('is-pressed');
-      if (e.cancelable) e.preventDefault();
-      e.stopPropagation();
-      handler(e);
-    };
+      if (syncTextSpan) syncTextSpan.textContent = 'Синхронно';
+    }
 
-    const onCancel = () => {
-      pressed = false;
-      el.classList.remove('is-pressed');
-    };
+    if (success) {
+      state.syncEnabled = newState;
+      if (syncBtn) syncBtn.classList.toggle('active', state.syncEnabled);
 
-    el.addEventListener('pointerdown', onDown, { passive: true });
-    el.addEventListener('pointermove', onMove, { passive: true });
-    el.addEventListener('pointerup', onUp);
-    el.addEventListener('pointercancel', onCancel);
-    el.addEventListener('pointerleave', onCancel);
-
-    // Fallback для очень старых WebView без pointer events
-    if (!window.PointerEvent) {
-      el.addEventListener('touchstart', onDown, { passive: true });
-      el.addEventListener('touchmove', onMove, { passive: true });
-      el.addEventListener('touchend', onUp);
-      el.addEventListener('touchcancel', onCancel);
+      if (state.syncEnabled && carouselZone === 'driver') {
+        const currentTemp = state.driverTemp;
+        if (currentTemp !== null) {
+          const values = buildCarouselValues();
+          const safeCurrent = clampTemp(currentTemp);
+          if (values.includes(safeCurrent)) scrollToValue(safeCurrent);
+        }
+      }
+      if (typeof showToast === 'function') {
+        showToast(state.syncEnabled ? 'Синхронизация включена' : 'Синхронизация выключена', 1500);
+      }
+    } else {
+      if (typeof showToast === 'function') {
+        showToast('Машина отклонила команду синхронизации', 2000);
+      }
     }
   }
 
@@ -404,7 +427,6 @@ modules.climateTemp = (function() {
     closeBtn.addEventListener('click', (e) => { e.stopPropagation(); closeCarousel(); });
     panel.appendChild(closeBtn);
 
-    // --- Кнопка "СИНХРОННО" ---
     const syncBtn = document.createElement('button');
     syncBtn.type = 'button';
     syncBtn.className = `climate-temp-carousel__sync-btn ${state.syncEnabled ? 'active' : ''}`;
@@ -417,70 +439,22 @@ modules.climateTemp = (function() {
       </svg>
       <span>Синхронно</span>
     `;
-
     const syncTextSpan = syncBtn.querySelector('span');
-    let syncRequestInFlight = false;
 
-    const handleSyncClick = async (e) => {
-      if (syncRequestInFlight) return;
-
-      // Мгновенная визуальная реакция
-      const newState = !state.syncEnabled;
-      syncRequestInFlight = true;
-      state.syncPending = true;
-      syncBtn.classList.add('pending');
-      syncBtn.disabled = true;
-      if (syncTextSpan) syncTextSpan.textContent = 'Отправка...';
-
-      let success = false;
-
-      try {
-        const res = await android.requestCarCommandAsync(
-          { cmd: 'climate_set_sync', value: newState },
-          SYNC_REQUEST_TIMEOUT_MS
-        );
-        if (res && (res.success === true || res.status === 'ok')) {
-          success = true;
-        }
-      } catch (err) {
-        console.warn('[ClimateTemp] Sync error:', err);
-      } finally {
-        syncRequestInFlight = false;
-        state.syncPending = false;
-        syncBtn.classList.remove('pending');
-        syncBtn.disabled = false;
-        if (syncTextSpan) syncTextSpan.textContent = 'Синхронно';
+    let syncClickBusy = false;
+    const handleSyncClick = (e) => {
+      if (e) {
+        e.preventDefault();
+        e.stopPropagation();
       }
-
-      if (success) {
-        state.syncEnabled = newState;
-        syncBtn.classList.toggle('active', state.syncEnabled);
-
-        // При включении синхронизации выравниваем текущую температуру
-        if (state.syncEnabled && carouselZone) {
-          const currentTemp = carouselZone === 'driver' ? state.driverTemp : state.passengerTemp;
-          if (currentTemp !== null) {
-            applyTempOptimistic('driver', currentTemp, false);
-            applyTempOptimistic('passenger', currentTemp, false);
-
-            const values = buildCarouselValues();
-            const safeCurrent = clampTemp(currentTemp);
-            if (values.includes(safeCurrent)) {
-              scrollToValue(safeCurrent);
-            }
-          }
-        }
-        if (typeof showToast === 'function') {
-          showToast(state.syncEnabled ? 'Синхронизация включена' : 'Синхронизация выключена', 1500);
-        }
-      } else {
-        if (typeof showToast === 'function') {
-          showToast('Машина отклонила команду синхронизации', 2000);
-        }
-      }
+      if (syncClickBusy || state.syncPending) return;
+      syncClickBusy = true;
+      setSync(!state.syncEnabled, syncBtn, syncTextSpan).finally(() => {
+        setTimeout(() => { syncClickBusy = false; }, 200);
+      });
     };
+    syncBtn.addEventListener('click', handleSyncClick);
 
-    attachPressHandler(syncBtn, handleSyncClick);
     panel.appendChild(syncBtn);
 
     overlay.appendChild(panel);
@@ -557,7 +531,7 @@ modules.climateTemp = (function() {
 
   function applyCarouselValue(value) {
     if (!carouselZone) return;
-    applyTempOptimistic(carouselZone, value, false);
+    requestTempChange(carouselZone, value);
   }
 
   function attachWheelHandlers(wheel, itemsContainer, values) {
@@ -667,7 +641,6 @@ modules.climateTemp = (function() {
     }, 300);
   }
 
-  // ---------- Обратная связь ----------
   function applyCarData(raw) {
     if (!raw) return;
     let payload;
@@ -739,7 +712,6 @@ modules.climateTemp = (function() {
     }
   }
 
-  // ---------- Периодический опрос ----------
   async function pollClimateState() {
     if (!isAndroid()) return;
     if (!state.enabled) return;
@@ -769,7 +741,6 @@ modules.climateTemp = (function() {
     if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
   }
 
-  // ---------- Видимость ----------
   function applyVisibility() {
     const show = storage.load('setting_showClimateTemp');
     const enabled = show !== false;
@@ -778,7 +749,6 @@ modules.climateTemp = (function() {
     if (zoneRight) zoneRight.classList.toggle('climate-temp-zone--hidden', !enabled);
   }
 
-  // ---------- Init / destroy ----------
   function init() {
     if (state.initialized) return;
     state.initialized = true;

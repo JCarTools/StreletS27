@@ -1,10 +1,7 @@
 /* ============================================
    Управление громкостью через свайп
-   Свайп в любой области экрана (кроме виджетов)
-   [UX] Индикатор громкости при свайпе
    ============================================ */
 
-/* Ripple эффект при начале свайпа */
 @keyframes swipeRippleLarge {
   0% {
     transform: translate(-50%, -50%) scale(0);
@@ -27,7 +24,6 @@
   animation: swipeRippleLarge 0.5s ease-out forwards;
 }
 
-/* [UX] Индикатор громкости при свайпе */
 .volume-indicator {
   position: fixed;
   top: 2rem;
@@ -96,7 +92,6 @@ body.light .volume-indicator__value {
   color: rgba(66, 76, 97, 0.85);
 }
 
-/* Подсказка для пользователя (несколько первых раз) */
 .volume-hint {
   position: fixed;
   bottom: 30%;
@@ -135,14 +130,12 @@ body.light .volume-indicator__value {
   }
 }
 
-/* Off-mode: отключаем свайп */
 body.off-mode .swipe-ripple-large,
 body.off-mode .volume-hint,
 body.off-mode .volume-indicator {
   display: none !important;
 }
 
-/* Адаптация для мобильных устройств */
 @media (max-width: 768px) {
   .volume-hint {
     font-size: 0.7rem;
