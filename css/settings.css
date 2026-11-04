@@ -1,0 +1,623 @@
+/* settings.css - Модальное окно настроек в стиле виджетов */
+
+.settings-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.settings-modal-overlay.open {
+  opacity: 1;
+}
+
+.settings-modal-content {
+  position: relative;
+  width: min(80vw, 800px);
+  max-width: 800px;
+  height: auto;
+  max-height: 85vh;
+  background: var(--bg-widget, rgba(29, 27, 32, 0.7));
+  backdrop-filter: blur(20px);
+  border-radius: 1.5rem;
+  border: 1px solid var(--oem-border-soft, rgba(255, 255, 255, 0.08));
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: settingsSlideIn 0.3s ease-out;
+  opacity: var(--widget-opacity, 1);
+}
+
+body.light .settings-modal-content {
+  background: rgba(235, 238, 245, 0.85);
+  backdrop-filter: blur(20px);
+  border-color: rgba(83, 94, 125, 0.12);
+}
+
+@keyframes settingsSlideIn {
+  from { opacity: 0; transform: scale(0.96) translateY(8px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.settings-header {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
+}
+
+.settings-header h2,
+.settings-header-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  color: rgba(255, 255, 255, 0.92);
+  margin: 0;
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+body.light .settings-header h2,
+body.light .settings-header-title {
+  color: rgba(28, 35, 48, 0.92);
+}
+
+.settings-header-link {
+  appearance: none;
+  -webkit-appearance: none;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 1.1rem;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  color: rgba(255, 255, 255, 0.92);
+  flex: 0 0 auto;
+  transition: opacity 0.15s ease, transform 0.1s ease;
+  -webkit-tap-highlight-color: transparent;
+  line-height: 1.2;
+}
+
+.settings-header-link:hover { opacity: 0.8; }
+.settings-header-link:active { transform: scale(0.97); opacity: 0.7; }
+
+body.light .settings-header-link {
+  color: rgba(28, 35, 48, 0.92);
+}
+
+.settings-close-btn {
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 0.9rem;
+  background: linear-gradient(180deg, rgba(40, 46, 58, 0.6), rgba(19, 22, 30, 0.36));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.settings-close-btn svg {
+  width: 1rem;
+  height: 1rem;
+  color: rgba(238, 242, 247, 0.86);
+}
+
+.settings-close-btn:hover {
+  background: linear-gradient(180deg, rgba(50, 58, 73, 0.76), rgba(24, 29, 38, 0.58));
+  transform: scale(1.02);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.settings-close-btn:active { transform: scale(0.98); }
+
+body.light .settings-close-btn {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(232, 237, 245, 0.58));
+  border-color: rgba(86, 97, 124, 0.11);
+}
+
+body.light .settings-close-btn svg {
+  color: rgba(44, 53, 73, 0.82);
+}
+
+.settings-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem 1.25rem;
+  scrollbar-width: thin;
+}
+
+.settings-body::-webkit-scrollbar { width: 4px; }
+.settings-body::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.05); border-radius: 10px; }
+.settings-body::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); border-radius: 10px; }
+.settings-body::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.3); }
+
+.settings-section {
+  margin-bottom: 1.5rem;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 1rem;
+  padding: 0.5rem 0;
+  border: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+body.light .settings-section {
+  background: rgba(0, 0, 0, 0.03);
+  border-color: rgba(0, 0, 0, 0.04);
+}
+
+.settings-section-title {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: rgba(255, 255, 255, 0.45);
+  padding: 0.5rem 1rem 0.25rem;
+  margin: 0;
+}
+
+body.light .settings-section-title {
+  color: rgba(50, 60, 80, 0.55);
+}
+
+/* === ЕДИНАЯ СЕТКА ДЛЯ ВСЕХ СЕРВЕРОВ === */
+.settings-server-row {
+  display: grid;
+  grid-template-columns: 24px 130px minmax(0, 1fr) 70px;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.settings-server-row:last-child { border-bottom: none; }
+
+.settings-server-cb {
+  width: 1.1rem;
+  height: 1.1rem;
+  cursor: pointer;
+  accent-color: #4a80d0;
+  margin: 0;
+}
+
+.settings-server-label {
+  font-size: 0.8rem;
+  color: rgba(238, 242, 247, 0.85);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+body.light .settings-server-label {
+  color: rgba(45, 56, 78, 0.85);
+}
+
+.settings-server-middle {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  width: 100%;
+  padding-left: 5mm;
+}
+
+.settings-server-status {
+  font-size: 0.7rem;
+  text-align: right;
+  color: rgba(255, 255, 255, 0.6);
+  font-family: monospace;
+  white-space: nowrap;
+}
+
+.settings-text-input {
+  flex: 1;
+  width: 100%;
+  padding: 0.45rem 0.75rem;
+  font-size: 0.75rem;
+  background: linear-gradient(180deg, rgba(43, 49, 62, 0.68), rgba(21, 25, 33, 0.52));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0.75rem;
+  color: rgba(238, 242, 247, 0.85);
+  outline: none;
+  min-width: 0;
+  transition: border-color 0.2s;
+}
+
+.settings-text-input:focus { border-color: rgba(100, 150, 255, 0.5); }
+
+body.light .settings-text-input {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(231, 236, 245, 0.52));
+  border-color: rgba(88, 102, 134, 0.12);
+  color: rgba(45, 56, 78, 0.85);
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.7rem 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.settings-row:last-child { border-bottom: none; }
+
+.settings-label {
+  font-size: 0.85rem;
+  font-weight: 450;
+  color: rgba(231, 236, 244, 0.8);
+}
+
+body.light .settings-label {
+  color: rgba(50, 60, 80, 0.78);
+}
+
+.settings-range-container {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  min-width: 180px;
+}
+
+.settings-range {
+  flex: 1;
+  height: 3px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+  outline: none;
+  cursor: pointer;
+}
+
+.settings-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.9);
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+  border: none;
+  transition: transform 0.1s ease;
+}
+
+.settings-range::-webkit-slider-thumb:hover { transform: scale(1.2); }
+
+.settings-range::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.9);
+  cursor: pointer;
+  border: none;
+}
+
+body.light .settings-range { background: rgba(0, 0, 0, 0.12); }
+body.light .settings-range::-webkit-slider-thumb { background: rgba(50, 60, 80, 0.9); }
+
+.settings-range-value {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.6);
+  min-width: 50px;
+  text-align: right;
+  font-family: 'SF Mono', 'Monaco', monospace;
+}
+
+body.light .settings-range-value { color: rgba(50, 60, 80, 0.65); }
+
+.settings-select {
+  padding: 0.35rem 0.7rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: linear-gradient(180deg, rgba(43, 49, 62, 0.68), rgba(21, 25, 33, 0.52));
+  color: rgba(238, 242, 247, 0.85);
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  outline: none;
+  min-width: 130px;
+  transition: all 0.2s ease;
+}
+
+.settings-select:hover {
+  background: linear-gradient(180deg, rgba(50, 58, 73, 0.76), rgba(24, 29, 38, 0.58));
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.settings-select option { background: #1a1c24; color: #e0e0e0; }
+
+body.light .settings-select {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(231, 236, 245, 0.52));
+  border-color: rgba(88, 102, 134, 0.12);
+  color: rgba(45, 56, 78, 0.85);
+}
+
+body.light .settings-select option { background: #f0f2f5; color: #2c3540; }
+
+.settings-toggle {
+  min-width: 64px;
+  padding: 0.35rem 0.7rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: linear-gradient(180deg, rgba(43, 49, 62, 0.68), rgba(21, 25, 33, 0.52));
+  color: rgba(238, 242, 247, 0.7);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.settings-toggle.active {
+  background: linear-gradient(180deg, rgba(62, 91, 144, 0.82), rgba(32, 48, 79, 0.76));
+  border-color: rgba(176, 200, 255, 0.25);
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.settings-toggle:hover { transform: translateY(-1px); }
+.settings-toggle:active { transform: scale(0.97); }
+
+body.light .settings-toggle {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(231, 236, 245, 0.52));
+  border-color: rgba(88, 102, 134, 0.12);
+  color: rgba(45, 56, 78, 0.78);
+}
+
+body.light .settings-toggle.active {
+  background: linear-gradient(180deg, rgba(218, 230, 255, 0.95), rgba(189, 209, 247, 0.85));
+  border-color: rgba(96, 129, 203, 0.25);
+  color: rgba(36, 50, 83, 0.94);
+}
+
+.settings-check-all-btn {
+  min-width: 250px;
+  padding: 0.7rem 1.5rem;
+  font-size: 0.85rem;
+  background: linear-gradient(180deg, rgba(46, 52, 66, 0.92), rgba(24, 28, 36, 0.78));
+  border-color: rgba(255, 255, 255, 0.15);
+  color: rgba(238, 242, 247, 0.9);
+}
+
+.settings-check-all-btn:hover {
+  background: linear-gradient(180deg, rgba(56, 62, 76, 0.92), rgba(30, 34, 42, 0.85));
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.settings-check-all-btn.checking { pointer-events: none; opacity: 0.8; }
+
+body.light .settings-check-all-btn {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(232, 237, 245, 0.58));
+  border-color: rgba(88, 102, 134, 0.12);
+  color: rgba(45, 56, 78, 0.85);
+}
+
+.settings-info {
+  font-size: 0.85rem;
+  font-family: 'SF Mono', 'Monaco', monospace;
+  color: rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.05);
+  padding: 0.25rem 0.75rem;
+  border-radius: 1rem;
+}
+
+body.light .settings-info {
+  color: rgba(50, 60, 80, 0.65);
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.settings-reset-btn {
+  width: 100%;
+  margin-top: 1rem;
+  margin-bottom: 0.5rem;
+  padding: 0.7rem;
+  border-radius: 1rem;
+  background: linear-gradient(180deg, rgba(46, 52, 66, 0.92), rgba(24, 28, 36, 0.78));
+  border: 1px solid rgba(255, 100, 100, 0.2);
+  color: rgba(255, 150, 150, 0.85);
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.settings-reset-btn:hover {
+  background: linear-gradient(180deg, rgba(56, 62, 76, 0.92), rgba(30, 34, 42, 0.85));
+  border-color: rgba(255, 100, 100, 0.35);
+  transform: translateY(-1px);
+}
+
+.settings-reset-btn:active { transform: scale(0.98); }
+
+body.light .settings-reset-btn {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(232, 237, 245, 0.65));
+  border-color: rgba(255, 100, 100, 0.25);
+  color: rgba(180, 80, 80, 0.85);
+}
+
+body.light .settings-reset-btn:hover {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(242, 247, 255, 0.75));
+  border-color: rgba(255, 100, 100, 0.35);
+}
+
+/* ============================================
+   Увеличенный шрифт в раскрытых секциях настроек
+   (умеренно: +20..30% к базовым, чтобы влезало в строку)
+   ============================================ */
+
+.settings-section.settings-section--open .settings-section-title {
+  font-size: 0.95rem;
+}
+
+.settings-section.settings-section--open .settings-label {
+  font-size: 1rem;
+}
+
+.settings-section.settings-section--open .settings-range-value {
+  font-size: 0.9rem;
+  min-width: 56px;
+}
+
+.settings-section.settings-section--open .settings-select {
+  font-size: 0.9rem;
+  padding: 0.4rem 0.8rem;
+  min-width: 120px;
+}
+
+.settings-section.settings-section--open .settings-toggle {
+  font-size: 0.8rem;
+  min-width: 70px;
+  padding: 0.4rem 0.8rem;
+}
+
+.settings-section.settings-section--open .settings-info {
+  font-size: 0.9rem;
+}
+
+.settings-section.settings-section--open .settings-text-input {
+  font-size: 0.85rem;
+  padding: 0.5rem 0.8rem;
+}
+
+.settings-section.settings-section--open .settings-server-label {
+  font-size: 0.9rem;
+}
+
+.settings-section.settings-section--open .settings-server-status {
+  font-size: 0.8rem;
+}
+
+.settings-section.settings-section--open .settings-section-content {
+  padding: 0.4rem 0;
+}
+
+.settings-section.settings-section--open .settings-range {
+  height: 4px;
+}
+
+.settings-section.settings-section--open .settings-range::-webkit-slider-thumb {
+  width: 16px;
+  height: 16px;
+}
+
+.settings-section.settings-section--open .settings-range::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+}
+
+.settings-section.settings-section--open .settings-server-cb {
+  width: 1.2rem;
+  height: 1.2rem;
+}
+
+.settings-section.settings-section--open .settings-server-row {
+  grid-template-columns: 28px 140px minmax(0, 1fr) 80px;
+  gap: 0.6rem;
+  padding: 0.5rem 1rem;
+}
+
+.settings-section.settings-section--open .settings-reset-btn {
+  font-size: 0.9rem;
+  padding: 0.75rem;
+}
+
+/* На узких экранах — чуть меньше, чтобы влезало */
+@media (max-width: 600px) {
+  .settings-modal-content {
+    width: 92vw;
+    max-height: 88vh;
+  }
+
+  .settings-header {
+    padding: 0.75rem 1rem;
+    gap: 0.6rem;
+  }
+
+  .settings-header h2,
+  .settings-header-title,
+  .settings-header-link {
+    font-size: 1rem;
+  }
+
+  .settings-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.6rem;
+  }
+
+  .settings-range-container {
+    width: 100%;
+    min-width: auto;
+  }
+
+  .settings-select {
+    width: 100%;
+    min-width: auto;
+  }
+
+  .settings-toggle {
+    min-width: 80px;
+  }
+
+  .settings-server-row {
+    grid-template-columns: 24px 1fr;
+    gap: 0.5rem;
+    padding-bottom: 1rem;
+  }
+
+  .settings-server-middle {
+    grid-column: 1 / -1;
+    padding-left: 0;
+  }
+
+  .settings-server-status {
+    grid-column: 2 / 3;
+    text-align: left;
+  }
+
+  /* Увеличение для мобильного — но поменьше */
+  .settings-section.settings-section--open .settings-section-title { font-size: 0.9rem; }
+  .settings-section.settings-section--open .settings-label { font-size: 0.9rem; }
+  .settings-section.settings-section--open .settings-select { font-size: 0.85rem; }
+  .settings-section.settings-section--open .settings-toggle { font-size: 0.75rem; min-width: 70px; }
+  .settings-section.settings-section--open .settings-range-value { font-size: 0.85rem; }
+  .settings-section.settings-section--open .settings-text-input { font-size: 0.85rem; }
+  .settings-section.settings-section--open .settings-server-label { font-size: 0.85rem; }
+  .settings-section.settings-section--open .settings-server-status { font-size: 0.75rem; }
+  .settings-section.settings-section--open .settings-server-row {
+    grid-template-columns: 28px 1fr;
+    padding-bottom: 1rem;
+  }
+  .settings-section.settings-section--open .settings-reset-btn { font-size: 0.85rem; }
+}
+
+@media (min-width: 601px) and (max-width: 1024px) {
+  .settings-modal-content {
+    width: 70vw;
+  }
+}

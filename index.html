@@ -4,9 +4,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta charset="utf-8">
 <meta name="theme-color" content="#0F0D13">
+<meta name="color-scheme" content="dark light">
 <title>My Black Window</title>
 <link rel="manifest" href="manifest.json">
 <link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/preloader.css">
+<link rel="stylesheet" href="css/drag-drop.css">
 <link rel="stylesheet" href="css/widgets.css">
 <link rel="stylesheet" href="css/off-mode.css">
 <link rel="stylesheet" href="css/drawers.css">
@@ -16,48 +19,7 @@
 <link rel="stylesheet" href="css/volume-swipe.css">
 <link rel="stylesheet" href="css/climate-temp.css">
 <link rel="stylesheet" href="css/onboarding.css">
-<style>
-  html, body { overscroll-behavior: none; }
-  #app-content { opacity: 0; visibility: hidden; transition: opacity 0.3s ease, visibility 0.3s ease; }
-  #app-content.ready { opacity: 1; visibility: visible; }
-  #startup-preloader {
-    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-    background: #0F0D13; z-index: 100000;
-    display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 1rem;
-    transition: opacity 0.5s ease, visibility 0.5s ease;
-  }
-  #startup-preloader.hide { opacity: 0; visibility: hidden; }
-  .preloader-spinner {
-    width: 3rem; height: 3rem;
-    border: 0.3rem solid rgba(255,255,255,0.2); border-top-color: rgba(255,255,255,0.9);
-    border-radius: 50%; animation: preloaderSpin 0.8s linear infinite;
-  }
-  @keyframes preloaderSpin { to { transform: rotate(360deg); } }
-  .preloader-text { color: rgba(255,255,255,0.7); font-size: 0.85rem; letter-spacing: 0.1em; font-family: monospace; }
-
-  .widget-wrapper { display: flex; flex-shrink: 0; }
-  .widget-wrapper.widget-hidden { display: none !important; }
-
-  /* Стили для drag-and-drop перестановки виджетов */
-  .widget-dragging {
-    opacity: 0.85;
-    box-shadow: 0 20px 40px rgba(0,0,0,0.4), 0 0 0 2px rgba(100,150,255,0.4) !important;
-    cursor: grabbing !important;
-  }
-  .widget-drop-before {
-    box-shadow: -4px 0 0 0 rgba(100,150,255,0.9), 0 20px 40px rgba(0,0,0,0.4) !important;
-  }
-  .widget-drop-after {
-    box-shadow: 4px 0 0 0 rgba(100,150,255,0.9), 0 20px 40px rgba(0,0,0,0.4) !important;
-  }
-  .dashboard .widget,
-  .dashboard .right-buttons,
-  .dashboard .widget-wrapper {
-    user-select: none;
-    -webkit-user-select: none;
-    -webkit-touch-callout: none;
-  }
-</style>
+<noscript><style>#app-content{opacity:1;visibility:visible;}#startup-preloader{display:none;}</style></noscript>
 </head>
 <body>
 
@@ -68,7 +30,6 @@
   <div class="preloader-text">ЗАГРУЗКА ПАНЕЛИ...</div>
 </div>
 
-<!-- Добавлена подложка для сайдбара -->
 <div id="sidebarOverlay" class="sidebar-overlay"></div>
 
 <div id="app-content">
@@ -90,23 +51,19 @@
         <h3>Ручной выбор обоев</h3>
       </div>
       <button id="closeSidebar" class="close-btn" aria-label="Закрыть шторку">
-        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M8 8l8 8M16 8l-8 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        <svg class="right-button__icon" data-icon="close" viewBox="0 0 24 24" width="20" height="20"></svg>
       </button>
     </div>
 
     <div id="wallpaperAutoSettings"></div>
-    
+
     <div class="custom-wallpaper-section">
       <div class="custom-wallpaper-btn" id="presetVideoKamin">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M4 6h16v12H4zM10 9l5 3-5 3V9z"/>
-        </svg>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" data-icon="video"></svg>
         Камин HD
       </div>
       <div class="custom-wallpaper-btn" id="btnSaveCurrentWallpaper">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M17 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7l-4-4zm-5 16a3 3 0 1 1 0-6 3 3 0 0 1 0 6zm3-10H6V5h9v4z"/>
-        </svg>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" data-icon="save"></svg>
         💾 Сохранить текущие обои
       </div>
     </div>
@@ -162,11 +119,15 @@
         </div>
         <div class="widget_placeholder__center">
           <span class="widget_placeholder__value" id="fuelValue">—</span>
-          <span class="widget_placeholder__unit" id="fuelUnit">%</span>
+          <span class="widget_placeholder__unit" id="fuelUnit">Л</span>
         </div>
         <div class="widget_placeholder__bottom">
           <span class="widget_placeholder__value" id="batteryValue">—</span>
-          <span class="widget_placeholder__unit">V</span>
+          <span class="widget_placeholder__unit">В</span>
+        </div>
+        <div class="widget_placeholder__storage">
+          <span class="widget_placeholder__value" id="storageValue">—</span>
+          <span class="widget_placeholder__unit">ГБ</span>
         </div>
       </div>
     </div>
@@ -187,17 +148,17 @@
         </div>
         <div class="widget_player__buttons" aria-label="Управление воспроизведением">
           <button id="player__prev" class="widget_player__prev widget_player__btn" type="button" aria-label="Назад">
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 6v12M18 7l-8 5 8 5V7z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <svg data-icon="prev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"></svg>
           </button>
-          
+
           <button id="player__playpause" class="widget_player__play widget_player__btn widget_player__btn--primary" type="button" aria-label="Play/Pause">
-            <svg id="player__playpause_icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path id="player__playpause_path" d="M9 7.5v9l7-4.5-7-4.5z" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
+            <svg id="player__playpause_icon" viewBox="0 0 24 24" fill="none" data-icon="play" stroke="currentColor" stroke-width="1.9">
+              <path id="player__playpause_path" d="M9 7.5v9l7-4.5-7-4.5z"/>
             </svg>
           </button>
 
           <button id="player__next" class="widget_player__next widget_player__btn" type="button" aria-label="Вперёд">
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M18 6v12M6 7l8 5-8 5V7z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <svg data-icon="next" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"></svg>
           </button>
         </div>
         <div class="widget_player__volume_slider" id="player__volume_slider">
@@ -230,27 +191,13 @@
 
     <div class="right-buttons" aria-label="Быстрые действия" data-widget-id="buttons">
       <div id="btnWallpaper" class="widget_buttons" title="Автосмена обоев">
-        <span class="right-button__halo" aria-hidden="true"></span>
-        <svg class="right-button__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M4 4h16v16H4z"/>
-          <circle cx="8.5" cy="8.5" r="2.5"/>
-          <path d="M4 16l6-6 4 4 6-6"/>
-        </svg>
+        <svg class="right-button__icon" data-icon="wallpaperAuto" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"></svg>
       </div>
       <div id="openSidebar" class="widget_buttons" title="Выбор обоев">
-        <span class="right-button__halo" aria-hidden="true"></span>
-        <svg class="right-button__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="3" y="3" width="18" height="18" rx="2"/>
-          <circle cx="8.5" cy="8.5" r="2"/>
-          <path d="M3 15l4-4 3 3 6-6"/>
-        </svg>
+        <svg class="right-button__icon" data-icon="wallpaperPick" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"></svg>
       </div>
       <div id="btnSettings" class="widget_buttons" title="Настройки">
-        <span class="right-button__halo" aria-hidden="true"></span>
-        <svg class="right-button__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="3"/>
-          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-        </svg>
+        <svg class="right-button__icon" data-icon="settings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"></svg>
       </div>
     </div>
   </div>
@@ -282,26 +229,44 @@
 <script src="js/idb.js"></script>
 <script src="js/core.js"></script>
 <script src="js/climateLabels.js"></script>
-<script src="js/wallpaper.js"></script>
+<script src="js/icons.js"></script>
+<script src="js/wallpaper-core.js"></script>
+<script src="js/wallpaper-video.js"></script>
+<script src="js/wallpaper-main.js"></script>
 <script src="js/wallpaperManager.js"></script>
 <script src="js/clock.js"></script>
 <script src="js/network.js"></script>
 <script src="js/brandEditor.js"></script>
 <script src="js/volume.js"></script>
 <script src="js/player.js"></script>
+
+<!-- Климат (рефакторинг) -->
+<script src="js/climate-icons.js"></script>
+<script src="js/climate-state.js"></script>
+<script src="js/climate-render.js"></script>
 <script src="js/climate.js"></script>
+
+<!-- Климат: свайп температуры -->
+<script src="js/climate-temp-state.js"></script>
+<script src="js/climate-temp-zones.js"></script>
+<script src="js/climate-temp-carousel.js"></script>
 <script src="js/climate-temp.js"></script>
+
 <script src="js/apps.js"></script>
 <script src="js/carData.js"></script>
 <script src="js/fuel.js"></script>
 <script src="js/weather.js"></script>
 <script src="js/navigation.js"></script>
 <script src="js/settings-config.js"></script>
+<script src="js/settings-ui-controls.js"></script>
 <script src="js/settings-ui.js"></script>
+<script src="js/settings-core.js"></script>
+<script src="js/settings-slots.js"></script>
 <script src="js/settings.js"></script>
 <script src="js/sidebar-settings.js"></script>
 <script src="js/volume-swipe.js"></script>
 <script src="js/widgets-reorder.js"></script>
+<script src="js/onboarding-content.js"></script>
 <script src="js/onboarding.js"></script>
 <script src="js/diag.js"></script>
 <script src="js/main.js"></script>
