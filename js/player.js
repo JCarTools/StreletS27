@@ -1,9 +1,7 @@
 /**********************************************
  * Модуль: Плеер
- * [FIX] initProgressDrag: drag начинается по trackRow (шире), а seek считается по trackLine.
- * [FIX] seekToClientX: защита от null trackLine.
- * [FIX] volume-dot drag: touchmove на window (как mouse).
- * [FIX] applyPlayState: корректная остановка/запуск прогресс-тика.
+ * [FIX] onPlayPauseClick: мгновенное переключение иконки Play/Pause (оптимистично).
+ * [FIX] Защита от перебивания статуса, пока команда в пути.
  **********************************************/
 
 modules.player = (function() {
@@ -46,6 +44,10 @@ modules.player = (function() {
   let lastImgBase64 = null;
 
   let lastExplicitPositionTs = 0;
+  
+  // Новое: защита от перебивания статуса, пока команда в пути
+  let pendingPlayCommand = null;
+  let pendingPlayUntil = 0;
 
   function formatTime(ms) {
     if (!Number.isFinite(ms) || ms < 0) return "0:00";
@@ -132,7 +134,16 @@ modules.player = (function() {
 
   function onPlayPauseClick(e) {
     e?.stopPropagation?.();
-    applyPlayState(!isPlaying);
+    const nextState = !isPlaying;
+    
+    // 1. Мгновенно обновляем UI (оптимистично)
+    applyPlayState(nextState);
+    
+    // 2. Ставим защиту на 1.5 сек, чтобы опрос не перебил наше состояние
+    pendingPlayCommand = nextState;
+    pendingPlayUntil = Date.now() + 1500;
+
+    // 3. Отправляем команду в машину
     if (typeof android.runEnum === 'function') {
       android.runEnum("MEDIA_PLAY_PAUSE");
     }
@@ -283,7 +294,6 @@ modules.player = (function() {
 
     volumeDot.addEventListener('mousedown', startDrag);
     volumeDot.addEventListener('touchstart', startDrag, { passive: false });
-    // touchmove на window — чтобы палец не "отрывался" от дот при выходе за пределы
     window.addEventListener('mousemove', onDrag);
     window.addEventListener('mouseup', stopDrag);
     window.addEventListener('touchmove', onDrag, { passive: false });
@@ -458,7 +468,16 @@ modules.player = (function() {
                   : (data.playStat   !== undefined) ? data.playStat
                   : undefined;
     const newPlaying = parsePlayFlag(playRaw);
+    
     if (newPlaying !== undefined) {
+      // Защита: если мы только что нажали кнопку, игнорируем статус от машины, пока не истечет время
+      if (pendingPlayCommand !== null && Date.now() < pendingPlayUntil) {
+        if (newPlaying !== pendingPlayCommand) {
+          // Машина еще не догнала команду — игнорируем
+          return;
+        }
+      }
+      pendingPlayCommand = null; // Сбрасываем защиту, если машина подтвердила
       applyPlayState(newPlaying);
     }
   }
