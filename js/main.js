@@ -1,8 +1,7 @@
 /**********************************************
  * Main entry.
- * [FIX] Порядок инициализации: settings.init() вызывается до climateTemp.init()
- *       (настройки видимости зон температуры, размеров слотов и т.п. применяются раньше).
- * [FIX] refreshOemFeedbackOnSlots вызывается после settings.init().
+ * [FIX] Добавлена проверка: если виджеты не влезают в экран,
+ *       панель автоматически прокручивается вправо к настройкам.
  **********************************************/
 
 (function installModuleEventBindings() {
@@ -230,6 +229,22 @@ let lastClickY = 0;
 const DOUBLE_CLICK_MS = 300;
 const DOUBLE_CLICK_DIST = 40;
 
+function checkDashboardFit() {
+  const dashboard = document.querySelector('.dashboard');
+  if (!dashboard) return;
+
+  requestAnimationFrame(() => {
+    const isOverflowing = dashboard.scrollWidth > dashboard.clientWidth + 10;
+
+    if (isOverflowing) {
+      dashboard.scrollTo({ left: dashboard.scrollWidth, behavior: 'smooth' });
+      if (typeof showToast === 'function') {
+        showToast('Виджеты не помещаются. Отключите лишние в настройках.', 4000);
+      }
+    }
+  });
+}
+
 async function initUI() {
   if (typeof diag !== 'undefined') diag.init();
 
@@ -248,8 +263,6 @@ async function initUI() {
 
   await window.rebuildSidebarGrid();
 
-  // FIX: сначала применяем настройки (размеры слотов, видимость, цвета, флаги),
-  // затем инициализируем модули, которые читают эти настройки из storage.
   if (modules.settings) modules.settings.init();
   if (modules.sidebarSettings) modules.sidebarSettings.init();
 
@@ -479,12 +492,16 @@ async function initUI() {
       modules.navigation.applyThemeNow();
     }
   }, 150);
+
+  setTimeout(checkDashboardFit, 1000);
+  window.addEventListener('resize', () => {
+    clearTimeout(window._fitTimer);
+    window._fitTimer = setTimeout(checkDashboardFit, 500);
+  });
 }
 
 async function start() {
   try {
-    // modules.climate.init() создаёт слоты; настройки применяются позже в initUI
-    // через modules.settings.init() → Slots.updateClimateSlotsCount / updateClimateIconColor.
     if (modules.climate) await modules.climate.init();
     await initUI();
   } catch (e) {
