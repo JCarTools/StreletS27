@@ -1,6 +1,11 @@
 /**********************************************
  * Модуль: Плеер
- * [FIX] onPlayPauseClick: мгновенное переключение иконки Play/Pause (оптимистично).
+ * [FIX] Переключение Play/Pause:
+ *       - в HTML теперь ДВА path (play/pause) вместо одного;
+ *       - renderPlayState() переключает их через display;
+ *       - не кэшируем path наверху модуля — ищем в момент рендера;
+ *       - icons.init() больше не перезаписывает SVG (убрали data-icon="play").
+ * [FIX] onPlayPauseClick: мгновенное переключение иконки (оптимистично).
  * [FIX] Защита от перебивания статуса, пока команда в пути.
  **********************************************/
 
@@ -16,7 +21,6 @@ modules.player = (function() {
   const timeDurationSpan = timeSpans[1];
 
   const playPauseBtn = document.getElementById("player__playpause");
-  const playPausePath = document.getElementById("player__playpause_path");
 
   const trackRow = document.querySelector(".widget_player__track_row");
   const trackLine = document.querySelector(".widget_player__track_line");
@@ -44,7 +48,7 @@ modules.player = (function() {
   let lastImgBase64 = null;
 
   let lastExplicitPositionTs = 0;
-  
+
   // Новое: защита от перебивания статуса, пока команда в пути
   let pendingPlayCommand = null;
   let pendingPlayUntil = 0;
@@ -108,12 +112,24 @@ modules.player = (function() {
     updateProgressUI(trackPosition, trackDuration);
   }
 
+  /**
+   * Переключает иконку Play/Pause.
+   * [FIX] Ищем path-узлы в момент рендера (они могут быть заменены icons.init()).
+   * [FIX] Переключаем через display — надёжнее, чем замена d.
+   */
   function renderPlayState() {
-    if (!playPausePath) return;
+    const playPath = document.getElementById('player__playpause_play');
+    const pausePath = document.getElementById('player__playpause_pause');
+    if (!playPath || !pausePath) return;
+
     if (isPlaying) {
-      playPausePath.setAttribute('d', 'M9.5 7.5v9M14.5 7.5v9');
+      // Играет → показываем "паузу" (две полоски)
+      playPath.style.display = 'none';
+      pausePath.style.display = '';
     } else {
-      playPausePath.setAttribute('d', 'M9 7.5v9l7-4.5-7-4.5z');
+      // Пауза → показываем "play" (треугольник)
+      playPath.style.display = '';
+      pausePath.style.display = 'none';
     }
   }
 
@@ -135,10 +151,10 @@ modules.player = (function() {
   function onPlayPauseClick(e) {
     e?.stopPropagation?.();
     const nextState = !isPlaying;
-    
+
     // 1. Мгновенно обновляем UI (оптимистично)
     applyPlayState(nextState);
-    
+
     // 2. Ставим защиту на 1.5 сек, чтобы опрос не перебил наше состояние
     pendingPlayCommand = nextState;
     pendingPlayUntil = Date.now() + 1500;
@@ -468,16 +484,16 @@ modules.player = (function() {
                   : (data.playStat   !== undefined) ? data.playStat
                   : undefined;
     const newPlaying = parsePlayFlag(playRaw);
-    
+
     if (newPlaying !== undefined) {
-      // Защита: если мы только что нажали кнопку, игнорируем статус от машины, пока не истечет время
+      // Защита: если мы только что нажали кнопку — игнорируем статус от машины,
+      // пока не истечёт окно ожидания, ЕСЛИ машина ещё не догнала команду.
       if (pendingPlayCommand !== null && Date.now() < pendingPlayUntil) {
         if (newPlaying !== pendingPlayCommand) {
-          // Машина еще не догнала команду — игнорируем
           return;
         }
       }
-      pendingPlayCommand = null; // Сбрасываем защиту, если машина подтвердила
+      pendingPlayCommand = null;
       applyPlayState(newPlaying);
     }
   }
@@ -516,6 +532,8 @@ modules.player = (function() {
     if (typeof EventBus !== 'undefined') {
       EventBus.on('volumeChanged', (data) => handleVolumeFromSystem(data));
     }
+
+    // Первичная отрисовка иконки
     renderPlayState();
 
     requestMusicRefresh();
