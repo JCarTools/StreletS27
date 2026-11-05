@@ -35,9 +35,19 @@
 @media (max-width: 1200px) { :root { --base-font-size: 15px; } }
 @media (max-width: 900px)  { :root { --base-font-size: 13px; } }
 
+/* [FIX] Адаптация под узкие вертикальные экраны */
+@media (orientation: portrait) and (max-width: 1024px) {
+  :root {
+    --base-font-size: 12px;
+    --widget-size: 11.5rem;
+    --dashboard-bottom: 0.25rem;
+    --dashboard-left-right: 0.5rem;
+    --widget-gap: 0.25rem;
+  }
+}
+
 html { font-size: var(--base-font-size); }
 
-/* [FIX] Горизонтальный скролл документа заблокирован */
 html, body {
   overflow-x: hidden;
   overscroll-behavior-x: none;
@@ -154,20 +164,49 @@ body.widgets-hidden #btnNetwork {
 }
 
 /* === ОСНОВНАЯ ПАНЕЛЬ === */
-/* [FIX] Контейнер виджетов не расширяется за пределы экрана */
 .dashboard {
   position: absolute;
   bottom: var(--dashboard-bottom);
   left: var(--dashboard-left-right);
   right: var(--dashboard-left-right);
+  
   display: flex;
-  gap: var(--widget-gap);
   align-items: stretch;
+  gap: var(--widget-gap);
+  
   z-index: 10;
   transition: all 0.5s;
-  overflow: hidden;
-  min-width: 0;
+  
+  /* Разрешаем горизонтальный скролл, если виджеты не влезают */
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  -webkit-overflow-scrolling: touch;
+  
+  padding-bottom: 0.5rem;
+  margin-bottom: -0.5rem;
   flex-wrap: nowrap;
+}
+
+.dashboard::-webkit-scrollbar {
+  display: none;
+}
+
+/* [FIX] Плеер тянется, остальные виджеты фиксированы */
+.dashboard > .widget_player {
+  flex: 1 1 0%; /* Плеер занимает всё свободное место */
+  min-width: 150px;
+}
+
+.dashboard > .widget,
+.dashboard > .widget-wrapper,
+.dashboard > .right-buttons {
+  flex-shrink: 0; /* Остальные виджеты не сжимаются */
+}
+
+.dashboard > .right-buttons {
+  margin-left: auto; /* Прижимаем кнопки вправо, если плеер скрыт */
 }
 
 .system-fab__halo {
@@ -213,7 +252,6 @@ body.widgets-hidden #btnNetwork {
 }
 .diag-overlay.visible { display: block; }
 
-/* Кнопка закрытия диагностики */
 .diag-close {
   position: fixed;
   top: 0.4rem;
@@ -266,7 +304,6 @@ body.widgets-hidden #btnNetwork {
   -webkit-tap-highlight-color: transparent !important;
 }
 
-/* Отключаем контекстное меню и выделение на всем body, кроме полей ввода и модальных окон */
 body {
   -webkit-touch-callout: none;
 }
