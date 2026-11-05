@@ -1,10 +1,13 @@
 /**********************************************
  * Модуль: Индикатор сети внутри виджета данных
  * [FIX] applyVisibilityFromSettings: скрывает только строку `.widget_placeholder__top`,
- *       а не весь виджет данных. Весь виджет управляется через `showDataWidget`.
- * [FIX] fetchCheck: с no-cors ответ opaque не считается успехом; приоритет у imageCheck.
- * [FIX] checkGroup: сначала imageCheck, затем fetchCheck.
- * [FIX] Speedtest: поддержка тестирования на ПК (заглушки) и реальный тест на Android.
+ *       а не весь виджет данных.
+ * [FIX] fetchCheck: с no-cors ответ opaque НЕ считается успехом.
+ * [FIX] checkGroup: сначала imageCheck (надёжен в WebView), затем cors-fetch.
+ * [FIX] setStatus: начальный рендер из кэша статуса.
+ * [FIX] check(): защита от параллельных вызовов, кэш статуса в storage.
+ * [FIX] init(): принудительная отрисовка иконки ДО проверки — значок виден сразу.
+ * [FIX] Диагностика в консоль для отладки на ПК.
  **********************************************/
 
 modules.network = (function() {
@@ -12,11 +15,14 @@ modules.network = (function() {
   let status = 0;
   let checking = false;
   let checkInterval = null;
+
   const btn = document.getElementById('btnNetwork');
   const icon = document.getElementById('networkIconContainer');
   const widget = document.getElementById('widgetPlaceholder');
 
+  // [FIX] Если ключевых элементов нет — не тихо умираем, а логируем.
   if (!btn || !icon) {
+    console.warn('[Network] #btnNetwork или #networkIconContainer не найдены в DOM');
     return { init() {}, stopAutoCheck() {}, setVisible() {}, check() {}, forceStatus() {} };
   }
 
@@ -48,11 +54,9 @@ modules.network = (function() {
   const SPEEDTEST_TIMEOUT_MS = 15000;
   const SPEEDTEST_OVERLAY_DURATION_MS = 5000;
   const SPEEDTEST_OVERLAY_ID = 'speedtest-overlay';
-  const SPEEDTEST_UPLOAD_SIZE = 500 * 1024;
 
   const SPEEDTEST_DOWNLOAD_URL = 'https://speed.cloudflare.com/__down?bytes=2000000';
   const RU_SPEEDTEST_URL = 'https://speed.cloudflare.com/__down?bytes=2000000&colo=DME';
-
   const CUSTOM_SPEEDTEST_URL = 'https://dwn.jcartools.ru/arad/Base.zip';
   const PING_CUSTOM_URL = 'https://dwn.jcartools.ru/arad/Base.zip';
 
@@ -67,6 +71,8 @@ modules.network = (function() {
   const PING_ATTEMPTS = 3;
   const PING_TIMEOUT_MS = 4000;
 
+  const STORAGE_KEY_STATUS = 'network_last_status';
+
   const STATUS_HINTS = {
     0: '❌ Нет интернета',
     1: '⚠️ Ограниченный доступ (белые списки)',
@@ -77,7 +83,6 @@ modules.network = (function() {
     if (typeof showToast === 'function') showToast(text, TOAST_DURATION_MS);
   }
 
-  // FIX: скрываем/показываем ТОЛЬКО строку с иконкой сети, а не весь виджет.
   function applyVisibilityFromSettings() {
     const show = storage.load('setting_showNetworkStatus') !== false;
     const topRow = document.querySelector('.widget_placeholder__top');
@@ -93,7 +98,6 @@ modules.network = (function() {
     overlay.innerHTML = `
       <div class="speedtest-title">Замер скорости...</div>
       <div class="speedtest-progress"><div class="speedtest-progress-bar"></div></div>
-
       <div class="speedtest-row speedtest-row--ru">
         <span class="speedtest-label speedtest-label--ru">🇷🇺 РФ Download:</span>
         <span class="speedtest-value" data-test="ru-download">…</span>
@@ -104,7 +108,6 @@ modules.network = (function() {
         <span class="speedtest-value" data-test="ru-upload">…</span>
         <span class="speedtest-ping"></span>
       </div>
-
       <div class="speedtest-row speedtest-row--world">
         <span class="speedtest-label speedtest-label--world">🌍 Мир Download:</span>
         <span class="speedtest-value" data-test="world-download">…</span>
@@ -115,7 +118,6 @@ modules.network = (function() {
         <span class="speedtest-value" data-test="world-upload">…</span>
         <span class="speedtest-ping"></span>
       </div>
-
       <div class="speedtest-row speedtest-row--custom" style="margin-top: 10px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 8px;">
         <span class="speedtest-label" style="color: #ffeb3b;">📦 jcartools.ru:</span>
         <span class="speedtest-value" data-test="custom-download">…</span>
@@ -298,8 +300,6 @@ modules.network = (function() {
         return;
       }
 
-      // --- РЕАЛЬНЫЙ ТЕСТ (Android WebView) ---
-
       setOverlayTitle('Пинг РФ...');
       setOverlayProgress(10);
       try {
@@ -374,6 +374,8 @@ modules.network = (function() {
     }
   }
 
+  // === SVG-иконки статуса ===
+
   function svgNoNetwork() {
     return '<svg class="network-svg" viewBox="0 0 24 24">' +
       '<circle cx="12" cy="12" r="10" stroke="#F44336" stroke-width="1.5" fill="none"/>' +
@@ -395,9 +397,14 @@ modules.network = (function() {
       '</svg>';
   }
 
+  // === Отрисовка статуса ===
+
   function setStatus(newStatus) {
+    if (![0, 1, 2].includes(newStatus)) newStatus = 0;
     status = newStatus;
     online = newStatus > 0;
+
+    storage.save(STORAGE_KEY_STATUS, newStatus);
 
     if (newStatus === 0) {
       icon.innerHTML = svgNoNetwork();
@@ -409,18 +416,40 @@ modules.network = (function() {
       icon.innerHTML = svgWifi('#7BA7FF');
       btn.title = 'Есть интернет';
     }
+
+    // [FIX] На ПК принудительно делаем значок видимым, если родитель не скрыт настройкой.
+    if (!IS_ANDROID_WEBVIEW) {
+      const show = storage.load('setting_showNetworkStatus') !== false;
+      if (show) {
+        btn.style.display = 'flex';
+        btn.style.opacity = '1';
+        btn.style.visibility = 'visible';
+      }
+    }
   }
+
+  function restoreStatusFromCache() {
+    const saved = storage.load(STORAGE_KEY_STATUS);
+    if (saved === 0 || saved === 1 || saved === 2) {
+      setStatus(saved);
+    } else {
+      icon.innerHTML = svgWifi('rgba(255,255,255,0.4)');
+      btn.title = 'Проверка сети...';
+    }
+  }
+
+  // === Проверки ===
 
   function fetchCheck(url) {
     const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-    const opts = { mode: 'no-cors', cache: 'no-store' };
+    const opts = { mode: 'cors', cache: 'no-store', credentials: 'omit' };
     if (controller) opts.signal = controller.signal;
 
     const fetchPromise = (async () => {
       try {
         const res = await fetch(url, opts);
-        if (res && res.type === 'opaque') return true;
-        return !!res && res.ok;
+        if (!res) return false;
+        return res.ok === true;
       } catch (e) {
         return false;
       }
@@ -489,12 +518,13 @@ modules.network = (function() {
       if (typeof navigator !== 'undefined' && navigator.onLine === false) {
         resultStatus = 0;
       } else {
-        const whiteOk = await checkGroup(WHITE_URLS, WHITE_IMG_URLS);
         const openOk = await checkGroup(OPEN_URLS, OPEN_IMG_URLS);
-
-        if (openOk) resultStatus = 2;
-        else if (whiteOk) resultStatus = 1;
-        else resultStatus = 0;
+        if (openOk) {
+          resultStatus = 2;
+        } else {
+          const whiteOk = await checkGroup(WHITE_URLS, WHITE_IMG_URLS);
+          resultStatus = whiteOk ? 1 : 0;
+        }
       }
       setStatus(resultStatus);
     } catch (e) {
@@ -522,6 +552,22 @@ modules.network = (function() {
 
   function init() {
     applyVisibilityFromSettings();
+
+    // [FIX] Принудительно показываем строку со значком, если настройка включена.
+    const show = storage.load('setting_showNetworkStatus') !== false;
+    const topRow = document.querySelector('.widget_placeholder__top');
+    if (topRow && show) topRow.classList.remove('is-hidden');
+
+    // [FIX] Сразу рисуем значок (нейтральный), чтобы он был виден до окончания проверки.
+    restoreStatusFromCache();
+
+    // [FIX] Гарантируем видимость кнопки на ПК.
+    if (!IS_ANDROID_WEBVIEW) {
+      btn.style.display = 'flex';
+      btn.style.opacity = '1';
+      btn.style.visibility = 'visible';
+    }
+
     check();
 
     btn.addEventListener('click', (e) => {
@@ -553,6 +599,9 @@ modules.network = (function() {
         applyVisibilityFromSettings();
       }
     });
+
+    // [DIAG] В консоль — что увидели.
+    console.log('[Network] init: btn=', btn, 'icon=', icon, 'IS_ANDROID_WEBVIEW=', IS_ANDROID_WEBVIEW);
   }
 
   return { init, stopAutoCheck, check, setVisible: applyVisibilityFromSettings, forceStatus };
