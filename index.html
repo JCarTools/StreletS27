@@ -11,6 +11,7 @@
 <link rel="stylesheet" href="css/preloader.css">
 <link rel="stylesheet" href="css/drag-drop.css">
 <link rel="stylesheet" href="css/widgets.css">
+<link rel="stylesheet" href="css/vertical-layout.css">
 <link rel="stylesheet" href="css/off-mode.css">
 <link rel="stylesheet" href="css/drawers.css">
 <link rel="stylesheet" href="css/ripple.css">
@@ -19,6 +20,7 @@
 <link rel="stylesheet" href="css/volume-swipe.css">
 <link rel="stylesheet" href="css/climate-temp.css">
 <link rel="stylesheet" href="css/onboarding.css">
+<link rel="stylesheet" href="css/orientation-picker.css">
 <noscript><style>#app-content{opacity:1;visibility:visible;}#startup-preloader{display:none;}</style></noscript>
 </head>
 <body>
@@ -87,118 +89,142 @@
   </div>
 
   <div class="dashboard">
-    <div class="widget_climate widget widget_climate_2x3" data-widget-id="climate">
-      <div class="climate-grid climate-grid_2x3">
-        <div class="climate_slot" data-climate-slot="1"></div>
-        <div class="climate_slot" data-climate-slot="2"></div>
-        <div class="climate_slot" data-climate-slot="3"></div>
-        <div class="climate_slot" data-climate-slot="4"></div>
-        <div class="climate_slot" data-climate-slot="5"></div>
-        <div class="climate_slot" data-climate-slot="6"></div>
-      </div>
-      <div class="climate-off-all" id="climateOffAll" title="Выключить всё">
-        <svg viewBox="0 0 14 14"><path d="M14 1.41L12.59 0L7 5.59L1.41 0L0 1.41L5.59 7L0 12.59L1.41 14L7 8.41L12.59 14L14 12.59L8.41 7L14 1.41Z" fill="#D9D9D9"/></svg>
-      </div>
-    </div>
-
-    <div class="widget_time widget" data-widget-id="time">
-      <div class="widget_time__weather-top" id="timeWeatherTop"></div>
-      <div class="flip-clock" id="flipClock"></div>
-      <div class="widget_time__date" id="dateDisplay"></div>
-      <div class="widget_time__weekday" id="weekdayDisplay"></div>
-      <div class="widget_time__weather-bottom" id="timeWeatherBottom"></div>
-      <div class="widget_time__signature">@Strelets27</div>
-    </div>
-
-    <div id="networkWidgetWrapper" class="widget-wrapper" data-widget-id="network">
-      <div class="widget_placeholder widget" id="widgetPlaceholder">
-        <div class="widget_placeholder__top">
-          <div id="btnNetwork" title="Статус подключения" aria-label="Статус подключения">
-            <span id="networkIconContainer"></span>
-          </div>
+    <div class="dashboard-row dashboard-row--top">
+      <div class="widget_climate widget widget_climate_2x3" data-widget-id="climate">
+        <div class="climate-grid climate-grid_2x3">
+          <div class="climate_slot" data-climate-slot="1"></div>
+          <div class="climate_slot" data-climate-slot="2"></div>
+          <div class="climate_slot" data-climate-slot="3"></div>
+          <div class="climate_slot" data-climate-slot="4"></div>
+          <div class="climate_slot" data-climate-slot="5"></div>
+          <div class="climate_slot" data-climate-slot="6"></div>
         </div>
-        <div class="widget_placeholder__center">
-          <span class="widget_placeholder__value" id="fuelValue">—</span>
-          <span class="widget_placeholder__unit" id="fuelUnit">Л</span>
-        </div>
-        <div class="widget_placeholder__bottom">
-          <span class="widget_placeholder__value" id="batteryValue">—</span>
-          <span class="widget_placeholder__unit">В</span>
-        </div>
-        <div class="widget_placeholder__storage">
-          <span class="widget_placeholder__value" id="storageValue">—</span>
-          <span class="widget_placeholder__unit">ГБ</span>
+        <div class="climate-off-all" id="climateOffAll" title="Выключить всё">
+          <svg viewBox="0 0 14 14"><path d="M14 1.41L12.59 0L7 5.59L1.41 0L0 1.41L5.59 7L0 12.59L1.41 14L7 8.41L12.59 14L14 12.59L8.41 7L14 1.41Z" fill="#D9D9D9"/></svg>
         </div>
       </div>
-    </div>
 
-    <div class="widget_player widget" data-widget-id="player">
-      <div class="widget_player__right">
-        <div class="widget_player__top">
-          <div class="widget_player__titles">
-            <div class="widget_player__title">Название песни</div>
-            <div class="widget_player__artist">Имя артиста</div>
-          </div>
-        </div>
-        <div class="widget_player__track_row">
-          <div class="widget_player__track_line">
-            <div class="widget_player__track_progress" style="width:0%"><div class="widget_player__track_dot"></div></div>
-          </div>
-          <div class="widget_player__track_time"><span>00:00</span> / <span>00:00</span></div>
-        </div>
-        <div class="widget_player__buttons" aria-label="Управление воспроизведением">
-          <button id="player__prev" class="widget_player__prev widget_player__btn" type="button" aria-label="Назад">
-            <svg data-icon="prev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"></svg>
-          </button>
+      <div class="widget_time widget" data-widget-id="time">
+        <div class="widget_time__weather-top" id="timeWeatherTop"></div>
+        <div class="flip-clock" id="flipClock"></div>
+        <div class="widget_time__date" id="dateDisplay"></div>
+        <div class="widget_time__weekday" id="weekdayDisplay"></div>
+        <div class="widget_time__weather-bottom" id="timeWeatherBottom"></div>
+        <div class="widget_time__signature">@Strelets27</div>
+      </div>
 
-          <button id="player__playpause" class="widget_player__play widget_player__btn widget_player__btn--primary" type="button" aria-label="Play/Pause">
-            <svg id="player__playpause_icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-              <path id="player__playpause_play" d="M9 7.5v9l7-4.5-7-4.5z" fill="currentColor" stroke="none"></path>
-              <path id="player__playpause_pause" d="M9.5 7.5v9M14.5 7.5v9" fill="none" stroke="currentColor" style="display:none;"></path>
-            </svg>
-          </button>
-
-          <button id="player__next" class="widget_player__next widget_player__btn" type="button" aria-label="Вперёд">
-            <svg data-icon="next" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"></svg>
-          </button>
-        </div>
-        <div class="widget_player__volume_slider" id="player__volume_slider">
-          <div class="widget_player__volume_line">
-            <div class="widget_player__volume_fill" id="player__volume_fill" style="width: 50%">
-              <div class="widget_player__volume_dot"></div>
+      <div id="networkWidgetWrapper" class="widget-wrapper" data-widget-id="network">
+        <div class="widget_placeholder widget" id="widgetPlaceholder">
+          <div class="widget_placeholder__top">
+            <div id="btnNetwork" title="Статус подключения" aria-label="Статус подключения">
+              <span id="networkIconContainer"></span>
             </div>
           </div>
-          <span class="widget_player__volume_value" id="player__volume_value">50%</span>
+          <div class="widget_placeholder__center">
+            <span class="widget_placeholder__value" id="fuelValue">—</span>
+            <span class="widget_placeholder__unit" id="fuelUnit">Л</span>
+          </div>
+          <div class="widget_placeholder__bottom">
+            <span class="widget_placeholder__value" id="batteryValue">—</span>
+            <span class="widget_placeholder__unit">В</span>
+          </div>
+          <div class="widget_placeholder__storage">
+            <span class="widget_placeholder__value" id="storageValue">—</span>
+            <span class="widget_placeholder__unit">ГБ</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="widget_weather widget" id="widgetWeather" data-widget-id="weather">
+        <div class="weather-content" id="widgetWeatherContent">
+          <div class="weather-temp" style="font-size:0.8rem;opacity:0.5;">Загрузка...</div>
+        </div>
+      </div>
+
+      <div class="widget_navigation widget widget-hidden" id="widgetNavigation" data-widget-id="navigation">
+        <img class="nav-minimap-img" id="navMinimapImg" alt="Мини-карта">
+      </div>
+
+      <div class="widget_compass widget widget-hidden" id="widgetCompass" data-widget-id="compass">
+        <div class="compass-direction" id="compassDirection">С 0°</div>
+        <div class="compass-scene">
+          <div class="compass-plane" id="compassPlane">
+            <svg class="compass-dial-svg" id="compassDial" viewBox="-30 -30 260 260" xmlns="http://www.w3.org/2000/svg">
+              <circle class="compass-ring-outer" cx="100" cy="100" r="96" />
+              <circle class="compass-ring-inner" cx="100" cy="100" r="86" />
+              <g id="compassTicks"></g>
+              <g id="compassArrows"></g>
+              <g id="compassLabels"></g>
+            </svg>
+            <div class="compass-car-wrap">
+              <div class="compass-car-3d">
+                <img src="images/kompass.png" alt="Автомобиль">
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
 
-    <div class="widget_apps widget" data-count="4" data-widget-id="apps">
-      <div class="app_slot" data-slot="1"></div>
-      <div class="app_slot" data-slot="2"></div>
-      <div class="app_slot" data-slot="3"></div>
-      <div class="app_slot" data-slot="4"></div>
-    </div>
+    <div class="dashboard-row dashboard-row--bottom">
+      <div class="widget_player widget" data-widget-id="player">
+        <div class="widget_player__right">
+          <div class="widget_player__top">
+            <div class="widget_player__titles">
+              <div class="widget_player__title">Название песни</div>
+              <div class="widget_player__artist">Имя артиста</div>
+            </div>
+          </div>
+          <div class="widget_player__track_row">
+            <div class="widget_player__track_line">
+              <div class="widget_player__track_progress" style="width:0%"><div class="widget_player__track_dot"></div></div>
+            </div>
+            <div class="widget_player__track_time"><span>00:00</span> / <span>00:00</span></div>
+          </div>
+          <div class="widget_player__buttons" aria-label="Управление воспроизведением">
+            <button id="player__prev" class="widget_player__prev widget_player__btn" type="button" aria-label="Назад">
+              <svg data-icon="prev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"></svg>
+            </button>
 
-    <div class="widget_weather widget" id="widgetWeather" data-widget-id="weather">
-      <div class="weather-content" id="widgetWeatherContent">
-        <div class="weather-temp" style="font-size:0.8rem;opacity:0.5;">Загрузка...</div>
-      </div>
-    </div>
+            <button id="player__playpause" class="widget_player__play widget_player__btn widget_player__btn--primary" type="button" aria-label="Play/Pause">
+              <svg id="player__playpause_icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                <path id="player__playpause_play" d="M9 7.5v9l7-4.5-7-4.5z" fill="currentColor" stroke="none"></path>
+                <path id="player__playpause_pause" d="M9.5 7.5v9M14.5 7.5v9" fill="none" stroke="currentColor" style="display:none;"></path>
+              </svg>
+            </button>
 
-    <div class="widget_navigation widget widget-hidden" id="widgetNavigation" data-widget-id="navigation">
-      <img class="nav-minimap-img" id="navMinimapImg" alt="Мини-карта">
-    </div>
+            <button id="player__next" class="widget_player__next widget_player__btn" type="button" aria-label="Вперёд">
+              <svg data-icon="next" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"></svg>
+            </button>
+          </div>
+          <div class="widget_player__volume_slider" id="player__volume_slider">
+            <div class="widget_player__volume_line">
+              <div class="widget_player__volume_fill" id="player__volume_fill" style="width: 50%">
+                <div class="widget_player__volume_dot"></div>
+              </div>
+            </div>
+            <span class="widget_player__volume_value" id="player__volume_value">50%</span>
+          </div>
+        </div>
+      </div>
 
-    <div class="right-buttons" aria-label="Быстрые действия" data-widget-id="buttons">
-      <div id="btnWallpaper" class="widget_buttons" title="Автосмена обоев">
-        <svg class="right-button__icon" data-icon="wallpaperAuto" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"></svg>
+      <div class="widget_apps widget" data-count="4" data-widget-id="apps">
+        <div class="app_slot" data-slot="1"></div>
+        <div class="app_slot" data-slot="2"></div>
+        <div class="app_slot" data-slot="3"></div>
+        <div class="app_slot" data-slot="4"></div>
       </div>
-      <div id="openSidebar" class="widget_buttons" title="Выбор обоев">
-        <svg class="right-button__icon" data-icon="wallpaperPick" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"></svg>
-      </div>
-      <div id="btnSettings" class="widget_buttons" title="Настройки">
-        <svg class="right-button__icon" data-icon="settings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"></svg>
+
+      <div class="right-buttons" aria-label="Быстрые действия" data-widget-id="buttons">
+        <div id="btnWallpaper" class="widget_buttons" title="Автосмена обоев">
+          <svg class="right-button__icon" data-icon="wallpaperAuto" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"></svg>
+        </div>
+        <div id="openSidebar" class="widget_buttons" title="Выбор обоев">
+          <svg class="right-button__icon" data-icon="wallpaperPick" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"></svg>
+        </div>
+        <div id="btnSettings" class="widget_buttons" title="Настройки">
+          <svg class="right-button__icon" data-icon="settings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"></svg>
+        </div>
       </div>
     </div>
   </div>
@@ -229,6 +255,7 @@
 
 <script src="js/idb.js"></script>
 <script src="js/core.js"></script>
+<script src="js/layout-profile.js"></script>
 <script src="js/climateLabels.js"></script>
 <script src="js/icons.js"></script>
 <script src="js/wallpaper-core.js"></script>
@@ -241,13 +268,11 @@
 <script src="js/volume.js"></script>
 <script src="js/player.js"></script>
 
-<!-- Климат (рефакторинг) -->
 <script src="js/climate-icons.js"></script>
 <script src="js/climate-state.js"></script>
 <script src="js/climate-render.js"></script>
 <script src="js/climate.js"></script>
 
-<!-- Климат: свайп температуры -->
 <script src="js/climate-temp-state.js"></script>
 <script src="js/climate-temp-zones.js"></script>
 <script src="js/climate-temp-carousel.js"></script>
@@ -258,6 +283,7 @@
 <script src="js/fuel.js"></script>
 <script src="js/weather.js"></script>
 <script src="js/navigation.js"></script>
+<script src="js/compass.js"></script>
 <script src="js/settings-config.js"></script>
 <script src="js/settings-ui-controls.js"></script>
 <script src="js/settings-ui.js"></script>
@@ -269,6 +295,7 @@
 <script src="js/widgets-reorder.js"></script>
 <script src="js/onboarding-content.js"></script>
 <script src="js/onboarding.js"></script>
+<script src="js/orientation-picker.js"></script>
 <script src="js/diag.js"></script>
 <script src="js/main.js"></script>
 </body>
