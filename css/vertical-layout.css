@@ -1,0 +1,177 @@
+/* ============================================
+   ВЕРТИКАЛЬНЫЙ ПРОФИЛЬ (портрет, 15.6")
+   Два независимых ряда-контейнера внизу экрана.
+   В горизонтали .dashboard-row — display: contents,
+   виджеты становятся прямыми flex-item'ами .dashboard.
+   ============================================ */
+
+/* Обёртки рядов — по умолчанию (landscape) не мешают горизонтальной раскладке */
+.dashboard-row {
+  display: contents;
+}
+
+/* === Горизонтальный режим (как было) === */
+body:not(.layout-portrait) .dashboard > .widget_player,
+body:not(.layout-portrait) .dashboard-row > .widget_player {
+  flex: 1 1 0%;
+  min-width: 150px;
+}
+
+body:not(.layout-portrait) .dashboard > .widget,
+body:not(.layout-portrait) .dashboard > .widget-wrapper,
+body:not(.layout-portrait) .dashboard > .right-buttons,
+body:not(.layout-portrait) .dashboard-row > .widget,
+body:not(.layout-portrait) .dashboard-row > .widget-wrapper,
+body:not(.layout-portrait) .dashboard-row > .right-buttons {
+  flex-shrink: 0;
+}
+
+body:not(.layout-portrait) .dashboard-row > .right-buttons {
+  margin-left: auto;
+}
+
+/* === Портретный режим === */
+body.layout-portrait .dashboard {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: stretch;
+  gap: var(--widget-gap);
+  overflow-x: hidden;
+  overflow-y: hidden;
+  padding-bottom: 0.5rem;
+  margin-bottom: -0.5rem;
+  height: auto;
+}
+
+body.layout-portrait .dashboard-row {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--widget-gap);
+  min-height: var(--widget-size);
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  position: relative;
+  transition: box-shadow 0.25s ease, background 0.25s ease;
+}
+body.layout-portrait .dashboard-row::-webkit-scrollbar { display: none; }
+
+body.layout-portrait .dashboard-row > * {
+  flex: 0 0 auto;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+body.layout-portrait .dashboard-row > .widget_player {
+  flex: 1 1 150px;
+  min-width: 150px;
+  max-width: calc(100% - var(--widget-size) - 4.5rem - 2 * var(--widget-gap));
+}
+
+body.layout-portrait .dashboard-row > .widget-hidden,
+body.layout-portrait .dashboard-row > .off-mode-hidden {
+  display: none !important;
+}
+
+body.layout-portrait .dashboard-row .widget-drop-before {
+  box-shadow: -4px 0 0 0 rgba(100, 150, 255, 0.9), 0 20px 40px rgba(0, 0, 0, 0.4) !important;
+}
+body.layout-portrait .dashboard-row .widget-drop-after {
+  box-shadow: 4px 0 0 0 rgba(100, 150, 255, 0.9), 0 20px 40px rgba(0, 0, 0, 0.4) !important;
+}
+
+body.layout-portrait .dashboard.reorder-mode .dashboard-row > .widget,
+body.layout-portrait .dashboard.reorder-mode .dashboard-row > .right-buttons,
+body.layout-portrait .dashboard.reorder-mode .dashboard-row > .widget-wrapper {
+  animation: widgetShake 0.25s infinite ease-in-out;
+}
+
+body.layout-portrait .dashboard-row > .widget-dragging {
+  z-index: 1000;
+  opacity: 0.9;
+}
+
+/* ==========================================
+   ЛЁГКАЯ НЕОНОВАЯ СЕТКА ПРИ ПЕРЕТАСКИВАНИИ
+   ========================================== */
+
+/* В горизонтали — общий фон с сеткой на .dashboard */
+body.reorder-active .dashboard {
+  background-image:
+    linear-gradient(rgba(120, 160, 240, 0.10) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(120, 160, 240, 0.10) 1px, transparent 1px);
+  background-size: 1.5rem 1.5rem;
+  background-position: 0 0;
+  box-shadow: inset 0 0 0 1px rgba(120, 160, 240, 0.15), inset 0 0 40px rgba(120, 160, 240, 0.08);
+  border-radius: 1.6rem;
+  padding: 0.4rem;
+  transition: box-shadow 0.25s ease, background 0.25s ease;
+}
+
+/* В портрете — сетка на каждом ряду отдельно */
+body.layout-portrait.reorder-active .dashboard-row {
+  background-image:
+    linear-gradient(rgba(120, 160, 240, 0.10) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(120, 160, 240, 0.10) 1px, transparent 1px);
+  background-size: 1.5rem 1.5rem;
+  background-position: 0 0;
+  box-shadow: inset 0 0 0 1px rgba(120, 160, 240, 0.18), inset 0 0 30px rgba(120, 160, 240, 0.10);
+  border-radius: 1.4rem;
+  padding: 0.35rem;
+}
+
+/* Подсветка активного ряда (куда сейчас летит виджет) */
+body.reorder-active .dashboard-row--top.drag-hover-target,
+body.reorder-active .dashboard-row--bottom.drag-hover-target {
+  box-shadow: inset 0 0 0 2px rgba(120, 180, 255, 0.55), inset 0 0 40px rgba(120, 180, 255, 0.2);
+}
+
+/* Светящаяся «дорожка» вставки — переопределяем индикаторы */
+body.layout-portrait .dashboard-row .widget-drop-before {
+  box-shadow: -4px 0 0 0 rgba(120, 180, 255, 1),
+              -8px 0 20px 0 rgba(120, 180, 255, 0.45),
+              0 20px 40px rgba(0, 0, 0, 0.4) !important;
+}
+body.layout-portrait .dashboard-row .widget-drop-after {
+  box-shadow: 4px 0 0 0 rgba(120, 180, 255, 1),
+              8px 0 20px 0 rgba(120, 180, 255, 0.45),
+              0 20px 40px rgba(0, 0, 0, 0.4) !important;
+}
+
+body:not(.layout-portrait).reorder-active .dashboard .widget-drop-before {
+  box-shadow: -4px 0 0 0 rgba(120, 180, 255, 1),
+              -8px 0 20px 0 rgba(120, 180, 255, 0.45),
+              0 20px 40px rgba(0, 0, 0, 0.4) !important;
+}
+body:not(.layout-portrait).reorder-active .dashboard .widget-drop-after {
+  box-shadow: 4px 0 0 0 rgba(120, 180, 255, 1),
+              8px 0 20px 0 rgba(120, 180, 255, 0.45),
+              0 20px 40px rgba(0, 0, 0, 0.4) !important;
+}
+
+/* Плавное появление */
+.dashboard,
+.dashboard-row {
+  transition: background 0.25s ease, box-shadow 0.25s ease, padding 0.25s ease;
+}
+
+/* Адаптация размеров шрифта */
+@media (orientation: portrait) {
+  body.layout-portrait {
+    --base-font-size: 16px;
+  }
+}
+@media (orientation: portrait) and (min-width: 800px) {
+  body.layout-portrait {
+    --base-font-size: 18px;
+  }
+}
+@media (orientation: portrait) and (min-width: 1200px) {
+  body.layout-portrait {
+    --base-font-size: 20px;
+  }
+}

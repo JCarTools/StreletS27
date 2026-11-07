@@ -431,3 +431,26 @@ body.light .sidebar-setting-label { color: rgba(50, 60, 80, 0.75); }
   font-size: 0.7rem;
   margin-top: 0.5rem;
 }
+
+/* Строка сервера кликабельна целиком */
+.settings-server-row--clickable {
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: background 0.15s ease;
+}
+.settings-server-row--clickable:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+body.light .settings-server-row--clickable:hover {
+  background: rgba(0, 0, 0, 0.03);
+}
+.settings-server-row--clickable:active {
+  background: rgba(255, 255, 255, 0.05);
+}
+.settings-server-row--clickable .settings-server-cb {
+  pointer-events: none; /* клик идёт через label */
+}
+.settings-server-row--clickable .settings-server-label {
+  cursor: pointer;
+}

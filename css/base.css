@@ -87,6 +87,17 @@ body.light {
     linear-gradient(180deg, rgba(255,255,255,0.18), rgba(219,225,236,0.18));
 }
 
+/* [NEW] Затемнение экрана (Оверлей) */
+body.screen-dimmed::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6); /* Настройка интенсивности затемнения */
+  pointer-events: none; /* Чтобы клики проходили сквозь оверлей */
+  z-index: 9999; /* Поверх виджетов, но под настройками (у модалок z-index 10000+) */
+  transition: opacity 0.8s ease;
+}
+
 body::before {
   content: '';
   position: fixed;
