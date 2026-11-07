@@ -1,14 +1,14 @@
 /**********************************************
  * Модуль: Перестановка виджетов (drag&drop).
- * Поддержка двух раскладок:
- *  - landscape: .dashboard содержит .dashboard-row (display:contents),
- *    виджеты — прямые дети .dashboard-row--top/--bottom.
- *  - portrait:  те же два ряда, но с display:flex.
- * [FIX] collectFromContainer теперь «проваливается» сквозь
- *       .dashboard-row (display:contents), собирая настоящие виджеты.
- * [FIX] getContainerOf возвращает реальный .dashboard-row,
- *       в который нужно вставлять.
- * [FIX] findWidgetFromPoint: возвращает сам виджет, а не обёртку.
+ * [FIX] Стабильный id: приоритет dataset.widgetId, затем id, затем класс.
+ * [FIX] Сохраняем порядок ВСЕХ виджетов (включая скрытые), чтобы
+ *       скрытие/показ не ломало раскладку.
+ * [FIX] Landscape: единый плоский список.
+ * [FIX] Portrait: два независимых ряда (row1/row2).
+ * [FIX] Не сбрасываем сохранённый порядок при расхождении — неизвестные
+ *       id просто дописываются в конец, а отсутствующие молча выпадают
+ *       из примения (без перезаписи localStorage).
+ * [FIX] Не цепляемся за вложенные .widget внутри .widget-wrapper.
  **********************************************/
 
 modules.widgetsReorder = (function() {
@@ -67,44 +67,78 @@ modules.widgetsReorder = (function() {
            el.classList.contains('widget_compass');
   }
 
+  // [FIX] Стабильный id: не затираем уже назначенный.
+  // Приоритет: dataset.widgetId -> id -> вычисленный по классу.
   function getWidgetId(el) {
-    return el.dataset.widgetId || null;
+    if (!el) return null;
+    if (el.dataset && el.dataset.widgetId) return el.dataset.widgetId;
+    if (el.id) {
+      el.dataset.widgetId = el.id;
+      return el.id;
+    }
+    return null;
+  }
+
+  function deriveIdFromClass(el) {
+    if (!el || !el.classList) return null;
+    if (el.id) return el.id;
+    if (el.classList.contains('right-buttons')) return 'buttons';
+    if (el.classList.contains('widget_player')) return 'player';
+    if (el.classList.contains('widget_climate_2x3')) return 'climate';
+    if (el.classList.contains('widget_apps')) return 'apps';
+    if (el.classList.contains('widget_time')) return 'time';
+    if (el.classList.contains('widget_weather')) return 'weather';
+    if (el.classList.contains('widget_navigation')) return 'navigation';
+    if (el.classList.contains('widget_compass')) return 'compass';
+    if (el.classList.contains('widget_placeholder')) return 'network';
+    return null;
+  }
+
+  // [FIX] Корневой виджет — прямой ребёнок .dashboard или .dashboard-row.
+  function getRootWidget(node) {
+    if (!node) return null;
+    let cur = node;
+    while (cur && cur !== dashboard) {
+      const parent = cur.parentNode;
+      if (parent === dashboard || isRowElement(parent)) {
+        if (isWidgetElement(cur)) return cur;
+        return null;
+      }
+      cur = parent;
+    }
+    return null;
   }
 
   function assignDefaultIds() {
-    const all = dashboard.querySelectorAll('[data-widget-id]');
-    all.forEach((el, idx) => {
+    const all = collectFromContainer(dashboard);
+    let counter = 0;
+    all.forEach(el => {
       if (!getWidgetId(el)) {
-        el.dataset.widgetId = 'w_' + idx;
+        const derived = deriveIdFromClass(el);
+        el.dataset.widgetId = derived || ('w_' + (counter++));
       }
     });
   }
 
-  // Собираем реальные виджеты, «проваливаясь» сквозь .dashboard-row
+  // [FIX] Только «корневые» виджеты (прямые дети dashboard / dashboard-row).
   function collectFromContainer(container) {
     const out = [];
     Array.from(container.children).forEach(el => {
-      if (isWidgetElement(el)) {
-        out.push(el);
-      } else if (isRowElement(el)) {
+      if (isRowElement(el)) {
         Array.from(el.children).forEach(child => {
           if (isWidgetElement(child)) out.push(child);
         });
+      } else if (isWidgetElement(el)) {
+        out.push(el);
       }
     });
     return out;
   }
 
-  // Все видимые виджеты (для глобального поиска)
+  // [FIX] Возвращаем ВСЕ виджеты, включая скрытые — иначе порядок ломается.
   function getAllWidgets() {
-    return collectFromContainer(dashboard).filter(el => {
-      if (el.classList.contains('widget-hidden')) return false;
-      if (el.classList.contains('off-mode-hidden')) return false;
-      return true;
-    });
+    return collectFromContainer(dashboard);
   }
-
-  // === Порядок: сохранение / восстановление ===
 
   function getSavedLandscapeOrder() {
     const raw = storage.load(LANDSCAPE_ORDER_KEY);
@@ -125,64 +159,155 @@ modules.widgetsReorder = (function() {
     return Array.from(dashboard.querySelectorAll('.dashboard-row'));
   }
 
+  function readRowIds(row) {
+    if (!row) return [];
+    return Array.from(row.children)
+      .filter(isWidgetElement)
+      .map(getWidgetId)
+      .filter(Boolean);
+  }
+
+  function readFlatIds() {
+    return getAllWidgets().map(getWidgetId).filter(Boolean);
+  }
+
+  function idsEqual(a, b) {
+    if (!Array.isArray(a) || !Array.isArray(b)) return false;
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) {
+      if (a[i] !== b[i]) return false;
+    }
+    return true;
+  }
+
+  // [FIX] Применяем порядок: сначала идут сохранённые, затем недостающие
+  // (в текущем DOM-порядке) — без сброса localStorage.
   function applyLandscapeOrder() {
     const saved = getSavedLandscapeOrder();
-    const all = collectFromContainer(dashboard);
-    const currentIds = all.map(getWidgetId).filter(Boolean);
-    const currentSet = new Set(currentIds);
+    const allWidgets = collectFromContainer(dashboard);
+    const allIds = allWidgets.map(getWidgetId).filter(Boolean);
 
-    const result = [];
-    for (const id of saved) {
-      if (currentSet.has(id) && !result.includes(id)) result.push(id);
+    if (!allIds.length) return;
+
+    if (!saved.length) {
+      saveLandscapeOrder(allIds);
+      return;
     }
-    for (const id of currentIds) {
-      if (!result.includes(id)) result.push(id);
-    }
-    if (result.length !== saved.length || result.some((v, i) => v !== saved[i])) {
-      saveLandscapeOrder(result);
-    }
+
+    const actualFlat = readFlatIds();
+    if (idsEqual(actualFlat, saved)) return;
 
     const byId = new Map();
-    all.forEach(el => byId.set(getWidgetId(el), el));
+    allWidgets.forEach(el => byId.set(getWidgetId(el), el));
 
-    // Вставляем в первый .dashboard-row, если он есть, иначе в dashboard
-    const row = getRows()[0] || dashboard;
-    result.forEach(id => {
-      const el = byId.get(id);
-      if (el) row.appendChild(el);
+    // Собираем итоговый список: сохранённые id + недостающие в конце.
+    const orderedIds = [];
+    const seen = new Set();
+    saved.forEach(id => {
+      if (byId.has(id) && !seen.has(id)) {
+        orderedIds.push(id);
+        seen.add(id);
+      }
     });
+    allIds.forEach(id => {
+      if (!seen.has(id)) {
+        orderedIds.push(id);
+        seen.add(id);
+      }
+    });
+
+    const rows = getRows();
+    const targetRow = rows[0] || dashboard;
+
+    orderedIds.forEach(id => {
+      const el = byId.get(id);
+      if (el) targetRow.appendChild(el);
+    });
+
+    // Обновляем localStorage, добавляя недостающие id, но сохраняя исходный порядок.
+    saveLandscapeOrder(orderedIds);
   }
 
   function applyPortraitOrder() {
     const rows = getRows();
     if (!rows.length) return;
-    const saved = getSavedPortraitOrder();
-    const all = collectFromContainer(dashboard);
-    const byId = new Map();
-    all.forEach(el => byId.set(getWidgetId(el), el));
 
-    const placed = new Set();
-    const placeTo = (row, ids) => {
-      ids.forEach(id => {
-        const el = byId.get(id);
-        if (!el || placed.has(el)) return;
-        placed.add(el);
-        row.appendChild(el);
+    const saved = getSavedPortraitOrder();
+    const allWidgets = collectFromContainer(dashboard);
+    const allIds = allWidgets.map(getWidgetId).filter(Boolean);
+
+    if (!allIds.length) return;
+
+    const savedRow1 = saved.row1 || [];
+    const savedRow2 = saved.row2 || [];
+
+    if (!savedRow1.length && !savedRow2.length) {
+      savePortraitOrder({
+        row1: readRowIds(rows[0]),
+        row2: rows[1] ? readRowIds(rows[1]) : []
       });
+      return;
+    }
+
+    const actualRow1 = readRowIds(rows[0]);
+    const actualRow2 = rows[1] ? readRowIds(rows[1]) : [];
+
+    const row1Equal = idsEqual(actualRow1, savedRow1);
+    const row2Equal = rows[1] ? idsEqual(actualRow2, savedRow2) : true;
+
+    if (row1Equal && row2Equal) return;
+
+    const byId = new Map();
+    allWidgets.forEach(el => byId.set(getWidgetId(el), el));
+
+    // Для каждого ряда: сохранённые + недостающие (из общего пула) в конце.
+    const buildOrdered = (savedIds, actualIds) => {
+      const ordered = [];
+      const seen = new Set();
+      savedIds.forEach(id => {
+        if (byId.has(id) && !seen.has(id)) {
+          ordered.push(id);
+          seen.add(id);
+        }
+      });
+      actualIds.forEach(id => {
+        if (!seen.has(id)) {
+          ordered.push(id);
+          seen.add(id);
+        }
+      });
+      return ordered;
     };
 
-    placeTo(rows[0], saved.row1);
-    if (rows[1]) placeTo(rows[1], saved.row2);
+    // Соберём все id, которые уже «заняты» сохранёнными рядами.
+    const claimed = new Set([...savedRow1, ...savedRow2]);
 
-    all.forEach(el => {
-      if (placed.has(el)) return;
-      const targetRow = rows[1] || rows[0];
-      targetRow.appendChild(el);
+    // Недостающие (новые) — сначала распределяем по их текущему ряду,
+    // иначе складываем в row1.
+    const newRow1 = [];
+    const newRow2 = [];
+    const row1Children = new Set(readRowIds(rows[0]));
+    allIds.forEach(id => {
+      if (claimed.has(id)) return;
+      if (row1Children.has(id)) newRow1.push(id);
+      else newRow2.push(id);
     });
 
-    const row1Ids = Array.from(rows[0].children).filter(isWidgetElement).map(getWidgetId).filter(Boolean);
-    const row2Ids = rows[1] ? Array.from(rows[1].children).filter(isWidgetElement).map(getWidgetId).filter(Boolean) : [];
-    savePortraitOrder({ row1: row1Ids, row2: row2Ids });
+    const finalRow1 = buildOrdered(savedRow1, newRow1);
+    const finalRow2 = rows[1] ? buildOrdered(savedRow2, newRow2) : [];
+
+    finalRow1.forEach(id => {
+      const el = byId.get(id);
+      if (el) rows[0].appendChild(el);
+    });
+    if (rows[1]) {
+      finalRow2.forEach(id => {
+        const el = byId.get(id);
+        if (el) rows[1].appendChild(el);
+      });
+    }
+
+    savePortraitOrder({ row1: finalRow1, row2: finalRow2 });
   }
 
   function applyOrder() {
@@ -190,7 +315,6 @@ modules.widgetsReorder = (function() {
     else applyLandscapeOrder();
   }
 
-  // Возвращает .dashboard-row, в котором лежит виджет
   function getContainerOf(el) {
     if (!el) return null;
     if (isRowElement(el.parentNode)) return el.parentNode;
@@ -198,20 +322,14 @@ modules.widgetsReorder = (function() {
     return null;
   }
 
-  // Поиск виджета по точке: поднимаемся от elementFromPoint вверх
   function findWidgetFromPoint(x, y, excludeEl) {
     const el = document.elementFromPoint(x, y);
     if (!el) return null;
-
     if (el.closest(INTERACTIVE_INSIDE_SELECTOR)) return null;
-
-    let node = el;
-    while (node && node !== dashboard) {
-      if (node === excludeEl) return null;
-      if (isWidgetElement(node)) return node;
-      node = node.parentElement;
-    }
-    return null;
+    const root = getRootWidget(el);
+    if (!root) return null;
+    if (excludeEl && root === excludeEl) return null;
+    return root;
   }
 
   function clearDropIndicators() {
@@ -262,12 +380,10 @@ modules.widgetsReorder = (function() {
     if (navigator.vibrate) { try { navigator.vibrate(10); } catch (e) {} }
   }
 
-  // Определяем, в каком .dashboard-row находится точка; если ни в каком — ближайший
   function findRowAtPoint(clientX, clientY) {
     const rows = getRows();
     if (!rows.length) return dashboard;
 
-    // Точное попадание
     for (const row of rows) {
       const rect = row.getBoundingClientRect();
       if (rect.width === 0 || rect.height === 0) continue;
@@ -276,7 +392,6 @@ modules.widgetsReorder = (function() {
         return row;
       }
     }
-    // Ближайший по Y
     let bestRow = rows[0];
     let bestDist = Infinity;
     rows.forEach(row => {
@@ -362,6 +477,17 @@ modules.widgetsReorder = (function() {
     }
   }
 
+  function persistOrder() {
+    if (isPortrait()) {
+      const rows = getRows();
+      const row1 = rows[0] ? readRowIds(rows[0]) : [];
+      const row2 = rows[1] ? readRowIds(rows[1]) : [];
+      savePortraitOrder({ row1, row2 });
+    } else {
+      saveLandscapeOrder(readFlatIds());
+    }
+  }
+
   function endDrag() {
     if (!dragState) return;
     const { widget, dropTarget, dropBefore, moved, originalContainer } = dragState;
@@ -381,24 +507,11 @@ modules.widgetsReorder = (function() {
           else targetContainer.insertBefore(widget, dropTarget.nextSibling);
         }
       } else {
-        // Не попали ни в один виджет — возвращаем в исходный контейнер
         if (originalContainer && originalContainer.appendChild) {
           originalContainer.appendChild(widget);
         }
       }
-
-      // Сохраняем порядок
-      if (isPortrait()) {
-        const rows = getRows();
-        const row1Ids = rows[0] ? Array.from(rows[0].children).filter(isWidgetElement).map(getWidgetId).filter(Boolean) : [];
-        const row2Ids = rows[1] ? Array.from(rows[1].children).filter(isWidgetElement).map(getWidgetId).filter(Boolean) : [];
-        savePortraitOrder({ row1: row1Ids, row2: row2Ids });
-      } else {
-        const rows = getRows();
-        const row = rows[0] || dashboard;
-        const ids = Array.from(row.children).filter(isWidgetElement).map(getWidgetId).filter(Boolean);
-        saveLandscapeOrder(ids);
-      }
+      persistOrder();
     }
 
     const state = dragState;
@@ -417,8 +530,6 @@ modules.widgetsReorder = (function() {
     exitReorderMode();
     return state;
   }
-
-  // === Обработчики ===
 
   function onMouseDown(e) {
     if (!initialized) return;
