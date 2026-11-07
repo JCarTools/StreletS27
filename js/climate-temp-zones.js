@@ -3,6 +3,7 @@
  * Часть 2 из 4.
  * [FIX] На машину отправляем числа: LO=15, HI=31 (без строк).
  * [NEW] climateSwipeInvert — направление свайпа.
+ * [NEW] showClimateTempCarousel — карусель можно отключить в настройках.
  **********************************************/
 
 modules.climateTempZones = (function() {
@@ -22,6 +23,10 @@ modules.climateTempZones = (function() {
 
   function isSwipeInverted() {
     return storage.load('setting_climateSwipeInvert') === 'Вверх — уменьшение';
+  }
+
+  function isCarouselEnabled() {
+    return storage.load('setting_showClimateTempCarousel') !== false;
   }
 
   function isOffMode() {
@@ -137,7 +142,6 @@ modules.climateTempZones = (function() {
     renderZone(side);
   }
 
-  // FIX: всегда число. LO=15, HI=31 отправляются как 15 и 31.
   function toAbsoluteValue(temp) {
     return Math.round(temp);
   }
@@ -309,6 +313,8 @@ modules.climateTempZones = (function() {
         return;
       }
       e.stopPropagation();
+      // Проверяем настройку карусели
+      if (!isCarouselEnabled()) return;
       if (typeof modules.climateTempCarousel !== 'undefined') {
         modules.climateTempCarousel.openCarousel(side);
       }
@@ -419,6 +425,7 @@ modules.climateTempZones = (function() {
     commitTempChange,
     ensureSyncDisabled,
     isSwipeInverted,
+    isCarouselEnabled,
     getZoneLeft,
     getZoneRight,
     setZoneLeft,

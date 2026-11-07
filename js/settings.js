@@ -1,7 +1,6 @@
 /**********************************************
  * Модуль: Логика настроек — точка входа
- * [FIX] showDataWidget — общий выключатель виджета данных.
- *       showNetworkStatus — только значок сети (не скрывает весь виджет).
+ * [NEW] showClimateTempCarousel: включение/выключение карусели температуры.
  **********************************************/
 
 modules.settings = (function() {
@@ -26,6 +25,80 @@ modules.settings = (function() {
 
   console.log('[Settings] Модуль загружен');
 
+  let autoDimInterval = null;
+  let autoDimSunTimes = { sunrise: null, sunset: null };
+  let autoDimLastDate = null;
+
+  async function fetchSunTimes(lat, lon) {
+    try {
+      const url = `https://api.sunrise-sunset.org/json?lat=${lat}&lng=${lon}&formatted=0`;
+      const res = await fetch(url);
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (data.status === 'OK' && data.results) {
+        return {
+          sunrise: new Date(data.results.sunrise),
+          sunset: new Date(data.results.sunset)
+        };
+      }
+    } catch (e) {
+      console.warn('[Settings] Sun times error:', e);
+    }
+    return null;
+  }
+
+  function applyThemeBasedOnTime() {
+    const mode = loadSetting('screenDimMode') || 'День';
+    if (mode === 'День') { document.body.classList.remove('screen-dimmed'); return; }
+    if (mode === 'Ночь') { document.body.classList.add('screen-dimmed'); return; }
+
+    const now = new Date();
+    const today = now.toDateString();
+
+    if (autoDimLastDate !== today) {
+      autoDimLastDate = today;
+      autoDimSunTimes = { sunrise: null, sunset: null };
+
+      if (modules.weather && typeof modules.weather.getCoords === 'function') {
+        const coords = modules.weather.getCoords();
+        if (coords && coords.lat && coords.lon) {
+          fetchSunTimes(coords.lat, coords.lon).then(times => {
+            if (times) { autoDimSunTimes = times; applyThemeBasedOnTime(); }
+          });
+        }
+      } else {
+        const savedLat = storage.load('weather_lat');
+        const savedLon = storage.load('weather_lon');
+        if (savedLat && savedLon) {
+          fetchSunTimes(savedLat, savedLon).then(times => {
+            if (times) { autoDimSunTimes = times; applyThemeBasedOnTime(); }
+          });
+        }
+      }
+    }
+
+    let sunrise = autoDimSunTimes.sunrise;
+    let sunset = autoDimSunTimes.sunset;
+    if (!sunrise || !sunset) {
+      sunrise = new Date(); sunrise.setHours(7, 0, 0, 0);
+      sunset = new Date(); sunset.setHours(19, 0, 0, 0);
+    }
+    const isDay = now >= sunrise && now < sunset;
+    document.body.classList.toggle('screen-dimmed', !isDay);
+  }
+
+  function startAutoDim() {
+    stopAutoDim();
+    applyThemeBasedOnTime();
+    autoDimInterval = setInterval(() => {
+      if (loadSetting('screenDimMode') === 'Авто по солнцу') applyThemeBasedOnTime();
+    }, 60000);
+  }
+
+  function stopAutoDim() {
+    if (autoDimInterval) { clearInterval(autoDimInterval); autoDimInterval = null; }
+  }
+
   function applyClimateColors(colorName) {
     const info = getClimateColorInfo(colorName);
     document.documentElement.style.setProperty('--climate-icon-color', info.hex);
@@ -39,24 +112,16 @@ modules.settings = (function() {
     const wrapper = document.getElementById('networkWidgetWrapper');
     if (!wrapper) return;
 
-    // Общий выключатель (раздел «Виджеты»)
     const showDataWidget = loadSetting('showDataWidget') !== false;
-
-    // Внутри виджета данных
     const showNetwork = loadSetting('showNetworkStatus') !== false;
     const showFuel = loadSetting('showFuel') !== false;
     const showBattery = loadSetting('showBattery') !== false;
     const showStorage = loadSetting('showStorage') !== false;
 
-    // Скрываем сам виджет, только если:
-    // - «Показывать виджет данных» выключено, ИЛИ
-    // - все 4 внутренних выключателя выключены
     const allInternalOff = !showNetwork && !showFuel && !showBattery && !showStorage;
     const wrapperHidden = !showDataWidget || allInternalOff;
-
     wrapper.classList.toggle(Core.WIDGET_HIDDEN_CLASS, wrapperHidden);
 
-    // Строки внутри
     const topRow = document.querySelector('.widget_placeholder__top');
     const centerRow = document.querySelector('.widget_placeholder__center');
     const bottomRow = document.querySelector('.widget_placeholder__bottom');
@@ -67,10 +132,7 @@ modules.settings = (function() {
     if (bottomRow) bottomRow.classList.toggle('is-hidden', !showBattery);
     if (storageRow) storageRow.classList.toggle('is-hidden', !showStorage);
 
-    // Синхронизируем network.js
-    if (modules.network && typeof modules.network.setVisible === 'function') {
-      modules.network.setVisible();
-    }
+    if (modules.network && typeof modules.network.setVisible === 'function') modules.network.setVisible();
   }
 
   function applySetting(key, value) {
@@ -78,6 +140,22 @@ modules.settings = (function() {
     Core.setApplying(true);
     try {
       switch (key) {
+        case 'screenOrientation': {
+          const profile = value === 'Вертикальный' ? 'portrait' : 'landscape';
+          if (modules.layoutProfile && typeof modules.layoutProfile.set === 'function') {
+            modules.layoutProfile.set(profile, { toast: false });
+          } else {
+            storage.save('setting_layoutProfile', profile);
+            document.body.classList.remove('layout-portrait', 'layout-landscape');
+            document.body.classList.add(profile === 'portrait' ? 'layout-portrait' : 'layout-landscape');
+          }
+          setTimeout(() => {
+            if (modules.widgetsReorder && typeof modules.widgetsReorder.refresh === 'function') {
+              modules.widgetsReorder.refresh();
+            }
+          }, 30);
+          break;
+        }
         case 'widgetSize': {
           document.documentElement.style.setProperty('--widget-size', value + 'rem');
           document.documentElement.style.setProperty('--clock-digit-size', `calc(${value}rem * 0.2)`);
@@ -119,6 +197,10 @@ modules.settings = (function() {
         case 'tapToChangeWallpaper':
           storage.save('tapToChangeWallpaper', value);
           break;
+        case 'screenDimMode':
+          applyThemeBasedOnTime();
+          startAutoDim();
+          break;
         case 'nightModeOnClockTap':
           storage.save('setting_nightModeOnClockTap', value);
           Slots.updateClockTapHandler();
@@ -141,6 +223,9 @@ modules.settings = (function() {
             modules.climateTempZones.applyVisibility();
           }
           break;
+        case 'showClimateTempCarousel':
+          // Никакого перерендера не нужно — модуль проверяет флаг в момент клика.
+          break;
         case 'climateTempOpacity':
           document.documentElement.style.setProperty('--climate-temp-opacity', value);
           break;
@@ -152,9 +237,7 @@ modules.settings = (function() {
           break;
         case 'fuelDisplayMode': {
           const mode = normalizeFuelDisplayMode(value);
-          if (mode !== value) {
-            storage.save('setting_fuelDisplayMode', mode);
-          }
+          if (mode !== value) storage.save('setting_fuelDisplayMode', mode);
           if (modules.fuel && typeof modules.fuel.refreshDisplay === 'function') modules.fuel.refreshDisplay();
           break;
         }
@@ -195,16 +278,17 @@ modules.settings = (function() {
           if (weatherWidget) weatherWidget.classList.toggle(Core.WIDGET_HIDDEN_CLASS, !value);
           break;
         }
+        case 'showCompass': {
+          const compassWidget = document.getElementById('widgetCompass');
+          if (compassWidget) compassWidget.classList.toggle(Core.WIDGET_HIDDEN_CLASS, !value);
+          break;
+        }
         case 'showMiniMap':
-          if (modules.navigation && typeof modules.navigation.refresh === 'function') {
-            modules.navigation.refresh();
-          }
+          if (modules.navigation && typeof modules.navigation.refresh === 'function') modules.navigation.refresh();
           break;
         case 'miniMapTheme': {
           const storedTheme = miniMapThemeToStorage(value);
-          if (storedTheme !== value) {
-            storage.save('setting_miniMapTheme', storedTheme);
-          }
+          if (storedTheme !== value) storage.save('setting_miniMapTheme', storedTheme);
           if (modules.navigation && typeof modules.navigation.applyThemeNow === 'function') {
             modules.navigation.applyThemeNow();
           } else if (modules.navigation && typeof modules.navigation.refresh === 'function') {
@@ -236,6 +320,8 @@ modules.settings = (function() {
         case 'offModeHideNetwork':
         case 'offModeHideMiniMap':
         case 'offModeHideRightButtons':
+        case 'offModeHideWeather':
+        case 'offModeHideCompass':
           if (modules.wallpaper && typeof modules.wallpaper.updateOffModeWidgetVisibility === 'function') {
             modules.wallpaper.updateOffModeWidgetVisibility();
           }
@@ -261,8 +347,8 @@ modules.settings = (function() {
 
   function init() {
     console.log('[Settings] init()');
-    applySetting('widgetSize', loadSetting('widgetSize') || 13.5);
-    applySetting('widgetOpacity', loadSetting('widgetOpacity') || 1);
+    applySetting('widgetSize', loadSetting('widgetSize') || 12.5);
+    applySetting('widgetOpacity', loadSetting('widgetOpacity') || 0.85);
     applySetting('widgetBlur', loadSetting('widgetBlur') || 10);
     applySetting('widgetBottomMargin', loadSetting('widgetBottomMargin') || 0.5);
     applySetting('showClockWeather', loadSetting('showClockWeather') !== false);
@@ -273,14 +359,15 @@ modules.settings = (function() {
     applySetting('climateSlotsCount', loadSetting('climateSlotsCount') || '6');
     applySetting('climateIconColor', loadSetting('climateIconColor') || 'Белый');
     applySetting('showClimateTemp', loadSetting('showClimateTemp') !== false);
-    applySetting('climateTempOpacity', loadSetting('climateTempOpacity') || 0.4);
-    applySetting('climateTempFontSize', loadSetting('climateTempFontSize') || 8);
+    applySetting('showClimateTempCarousel', loadSetting('showClimateTempCarousel') !== false);
+    applySetting('climateTempOpacity', loadSetting('climateTempOpacity') || 0.25);
+    applySetting('climateTempFontSize', loadSetting('climateTempFontSize') || 7.5);
     applySetting('fuelTankSize', loadSetting('fuelTankSize') || '57');
     applySetting('fuelDisplayMode', loadSetting('fuelDisplayMode') || 'Литры');
     applySetting('showWeather', loadSetting('showWeather') === true);
+    applySetting('showCompass', loadSetting('showCompass') === true);
     applySetting('showMiniMap', loadSetting('showMiniMap') === true);
 
-    // Виджет данных — единый блок
     applySetting('showDataWidget', loadSetting('showDataWidget') !== false);
     applySetting('showNetworkStatus', loadSetting('showNetworkStatus') !== false);
     applySetting('showFuel', loadSetting('showFuel') !== false);
@@ -293,7 +380,7 @@ modules.settings = (function() {
 
     applySetting('showClock', loadSetting('showClock') !== false);
     applySetting('showClimate', loadSetting('showClimate') !== false);
-    applySetting('showApps', loadSetting('showApps') !== false);
+    applySetting('showApps', loadSetting('showApps') === true);
     applySetting('showPlayer', loadSetting('showPlayer') !== false);
     applySetting('playerVolumeStep', loadSetting('playerVolumeStep') || 5);
     applySetting('autoRequestMusicState', loadSetting('autoRequestMusicState') !== false);
@@ -306,6 +393,11 @@ modules.settings = (function() {
     applySetting('offModeHideNetwork', loadSetting('offModeHideNetwork') !== false);
     applySetting('offModeHideMiniMap', loadSetting('offModeHideMiniMap') !== false);
     applySetting('offModeHideRightButtons', loadSetting('offModeHideRightButtons') !== false);
+    applySetting('offModeHideWeather', loadSetting('offModeHideWeather') !== false);
+    applySetting('offModeHideCompass', loadSetting('offModeHideCompass') !== false);
+
+    applySetting('screenDimMode', loadSetting('screenDimMode') || 'Авто по солнцу');
+    startAutoDim();
 
     applyDataWidgetVisibility();
 
@@ -321,18 +413,18 @@ modules.settings = (function() {
       };
       settingsBtn._clickHandler = clickHandler;
       settingsBtn.addEventListener('click', clickHandler);
-
-      if (typeof attachOemTouchFeedback === 'function') {
-        attachOemTouchFeedback(settingsBtn);
-      }
+      if (typeof attachOemTouchFeedback === 'function') attachOemTouchFeedback(settingsBtn);
     }
 
     window.addEventListener('resize', handleResize);
     window.addEventListener('orientationchange', handleResize);
   }
 
+  function destroy() { stopAutoDim(); }
+
   return {
     init,
+    destroy,
     open: () => modules.settingsUI.open(),
     close: () => modules.settingsUI.close(),
     applyOpacityToNewElement,

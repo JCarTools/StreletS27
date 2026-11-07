@@ -1,6 +1,7 @@
 /**********************************************
  * Модуль: Настройки автосмены обоев в сайдбаре.
- * [NEW] Добавлены: Picsum Grayscale, Picsum Color, LoremFlickr.
+ * [NEW] Клик по всей строке сервера (чекбокс + название)
+ *       переключает галочку. Раньше — только по самому чекбоксу.
  **********************************************/
 
 modules.sidebarSettings = (function() {
@@ -179,15 +180,16 @@ modules.sidebarSettings = (function() {
         </div>
         <div class="sidebar-setting-row" style="padding-bottom: 0.6rem;"></div>`;
 
+    // [NEW] Клик по всей строке (label-wrap) переключает чекбокс.
     const serverRow = (id, label) => {
       const enabled = storage.load(`setting_${id}Enabled`) === true;
       return `
-        <div class="settings-server-row">
-          <input type="checkbox" class="settings-server-cb" data-custom-id="${id}Enabled" ${enabled ? 'checked' : ''}>
+        <label class="settings-server-row settings-server-row--clickable" for="srv_cb_${id}">
+          <input type="checkbox" id="srv_cb_${id}" class="settings-server-cb" data-custom-id="${id}Enabled" ${enabled ? 'checked' : ''}>
           <span class="settings-server-label">${label}</span>
           <div class="settings-server-middle"></div>
           <span class="settings-server-status" id="status_${id}">${serverStatuses[id] || ''}</span>
-        </div>
+        </label>
       `;
     };
 
@@ -204,11 +206,11 @@ modules.sidebarSettings = (function() {
     const userCustomEnabled = storage.load('setting_user_custom_enabled') === true;
     const userCustomUrl = loadSetting('user_custom_url') || '';
     html += `
-        <div class="settings-server-row" style="grid-template-columns: 24px 1fr auto; padding-bottom: 0.5rem;">
-          <input type="checkbox" class="settings-server-cb" data-custom-id="user_custom_enabled" ${userCustomEnabled ? 'checked' : ''}>
+        <label class="settings-server-row settings-server-row--clickable" for="srv_cb_user_custom_enabled">
+          <input type="checkbox" id="srv_cb_user_custom_enabled" class="settings-server-cb" data-custom-id="user_custom_enabled" ${userCustomEnabled ? 'checked' : ''}>
           <span class="settings-server-label">Свой сервер</span>
           <span class="settings-server-status" id="status_user_custom" style="text-align: right;">${serverStatuses['user_custom'] || ''}</span>
-        </div>
+        </label>
         <div class="settings-server-row" style="grid-template-columns: 1fr; padding-top: 0;">
           <div class="settings-server-middle" style="padding-left: 0;">
             <input type="text" class="settings-text-input" id="sidebarUserCustomServer" value="${escapeHtml(userCustomUrl)}" placeholder="https://..." style="width: 100%;">
@@ -328,12 +330,8 @@ modules.sidebarSettings = (function() {
     if (!storage.load('setting_wallpaperCustomServerPicsum')) storage.save('setting_wallpaperCustomServerPicsum', FIXED_PICSUM_COLOR_URL);
     if (!storage.load('setting_wallpaperCustomServerLorem')) storage.save('setting_wallpaperCustomServerLorem', FIXED_LOREMFLICKR_URL);
 
-    if (!storage.load('autoWallpaperInterval')) {
-      storage.save('autoWallpaperInterval', '5 минут');
-    }
-    if (!storage.load('builtinWallpaperInterval')) {
-      storage.save('builtinWallpaperInterval', 'Никогда');
-    }
+    if (!storage.load('autoWallpaperInterval')) storage.save('autoWallpaperInterval', '5 минут');
+    if (!storage.load('builtinWallpaperInterval')) storage.save('builtinWallpaperInterval', 'Никогда');
 
     container.innerHTML = renderContent();
     bindEvents(container);

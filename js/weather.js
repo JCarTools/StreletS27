@@ -3,6 +3,8 @@
  * [FIX] findCurrentHourIndex: безопасный парсинг времени (не дублируем 'Z').
  * [FIX] render: защита от нечислового temp.
  * [FIX] init: защита от повторного навешивания EventBus-обработчиков.
+ * [NEW] destroy: очистка интервала и отписка от EventBus.
+ * [NEW] getCoords: возвращает текущие координаты для модуля настроек.
  **********************************************/
 
 modules.weather = (function() {
@@ -19,6 +21,7 @@ modules.weather = (function() {
   let callbacks = [];
 
   let eventsBound = false;
+  let eventBusHandlers = [];
 
   const OPEN_METEO_THROTTLE_MS = 30000;
   const BRIDGE_REQUEST_THROTTLE_MS = 10 * 60 * 1000;
@@ -204,19 +207,25 @@ modules.weather = (function() {
     eventsBound = true;
 
     if (typeof EventBus !== 'undefined') {
-      EventBus.on('gps', (data) => {
+      const gpsHandler = (data) => {
         const lat = Number(data?.lat);
         const lon = Number(data?.lon);
         if (Number.isFinite(lat) && Number.isFinite(lon)) {
           currentLat = lat; currentLon = lon;
+          storage.save('weather_lat', lat);
+          storage.save('weather_lon', lon);
           requestWeatherFromBridge();
           fetchOpenMeteo();
         }
-      });
-      EventBus.on('weather', (data) => {
+      };
+      const weatherHandler = (data) => {
         bridgeData = data;
         render();
-      });
+      };
+      EventBus.on('gps', gpsHandler);
+      EventBus.on('weather', weatherHandler);
+      eventBusHandlers.push({ type: 'gps', handler: gpsHandler });
+      eventBusHandlers.push({ type: 'weather', handler: weatherHandler });
     }
 
     if (typeof android.getWeather === 'function') {
@@ -224,6 +233,24 @@ modules.weather = (function() {
       if (saved && !saved.error) { bridgeData = saved; render(); }
     }
     startOpenMeteoInterval();
+  }
+
+  function destroy() {
+    if (openMeteoInterval) {
+      clearInterval(openMeteoInterval);
+      openMeteoInterval = null;
+    }
+    if (typeof EventBus !== 'undefined') {
+      eventBusHandlers.forEach(({ type, handler }) => {
+        EventBus.off(type, handler);
+      });
+      eventBusHandlers = [];
+    }
+    eventsBound = false;
+  }
+
+  function getCoords() {
+    return { lat: currentLat, lon: currentLon };
   }
 
   function subscribe(cb) {
@@ -240,5 +267,5 @@ modules.weather = (function() {
     if (idx !== -1) callbacks.splice(idx, 1);
   }
 
-  return { init, subscribe, unsubscribe, refreshClockDisplay, fetchWeather };
+  return { init, destroy, subscribe, unsubscribe, refreshClockDisplay, fetchWeather, getCoords };
 })();

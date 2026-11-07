@@ -3,6 +3,7 @@
  * Часть 1 из 2. Модалка и секции — в settings-ui.js.
  * [FIX] createRangeInput: throttle записи (input через rAF + сохранение на change/300мс).
  * [FIX] showExpandedQr: keydown-обработчик снимается при закрытии (без утечки).
+ * [NEW] createRangeInput: используется debounce для сохранения, чтобы не спамить localStorage.
  **********************************************/
 
 modules.settingsUIControls = (function() {

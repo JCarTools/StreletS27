@@ -1,7 +1,8 @@
 /**********************************************
  * Main entry.
- * [FIX] Добавлена проверка: если виджеты не влезают в экран,
- *       панель автоматически прокручивается вправо к настройкам.
+ * [NEW] Инициализация layoutProfile (портрет/ландшафт).
+ * [NEW] При первом запуске — orientationPicker перед onboarding.
+ * [NEW] init compass + destroy в cleanupIntervals.
  **********************************************/
 
 (function installModuleEventBindings() {
@@ -49,7 +50,7 @@ function isBackgroundElement(target) {
     '.app_slot', '.widget_player__btn', '.widget_player__track_line',
     '.widget_player__volume_slider',
     '#btnNetwork', '#btnWallpaper', '#openSidebar', '#btnSettings',
-    '#diagOverlay', '#widgetWeather', '#widgetNavigation',
+    '#diagOverlay', '#widgetWeather', '#widgetNavigation', '#widgetCompass',
     '.widget_time', '.widget_climate', '.widget_apps', '.widget_player',
     '#widgetPlaceholder', '.dashboard',
     '.wm-overlay', '.wm-content', '.wm-picker-overlay', '.wm-picker-content',
@@ -59,7 +60,8 @@ function isBackgroundElement(target) {
     '.climate-temp-zone', '.climate-temp-carousel',
     '#climate-temp-zone-left', '#climate-temp-zone-right', '#climate-temp-carousel',
     '#speedtest-overlay', '.volume-indicator', '.volume-hint',
-    '.onboarding-overlay', '.onboarding-content'
+    '.onboarding-overlay', '.onboarding-content',
+    '.orientation-picker-overlay', '.orientation-picker-content'
   ];
   for (const selector of excludeSelectors) {
     if (target.closest && target.closest(selector)) return false;
@@ -154,7 +156,10 @@ function cleanupIntervals() {
   if (modules.fuel && modules.fuel.destroy) modules.fuel.destroy();
   if (modules.player && modules.player.destroy) modules.player.destroy();
   if (modules.navigation && modules.navigation.destroy) modules.navigation.destroy();
+  if (modules.compass && modules.compass.destroy) modules.compass.destroy();
   if (modules.widgetsReorder && modules.widgetsReorder.destroy) modules.widgetsReorder.destroy();
+  if (modules.weather && modules.weather.destroy) modules.weather.destroy();
+  if (modules.settings && modules.settings.destroy) modules.settings.destroy();
 }
 window.addEventListener('beforeunload', cleanupIntervals);
 
@@ -233,6 +238,8 @@ function checkDashboardFit() {
   const dashboard = document.querySelector('.dashboard');
   if (!dashboard) return;
 
+  if (document.body.classList.contains('layout-portrait')) return;
+
   requestAnimationFrame(() => {
     const isOverflowing = dashboard.scrollWidth > dashboard.clientWidth + 10;
 
@@ -272,6 +279,7 @@ async function initUI() {
   if (modules.network) modules.network.init();
   if (modules.fuel) modules.fuel.init();
   if (modules.weather) modules.weather.init();
+  if (modules.compass) modules.compass.init();
   if (modules.carData) modules.carData.init();
   if (modules.volume) modules.volume.init();
   if (modules.volumeSwipe) modules.volumeSwipe.init();
@@ -282,6 +290,9 @@ async function initUI() {
 
   if (modules.onboarding) {
     setTimeout(() => {
+      if (modules.orientationPicker && !modules.orientationPicker.isResolved()) {
+        return;
+      }
       modules.onboarding.init();
     }, 1000);
   }
@@ -318,10 +329,11 @@ async function initUI() {
       const exclude = [
         '.settings-modal-overlay', '.settings-modal-content',
         '.modal-overlay', '.modal-content', '.picker-drawer',
-        '#sidebar', '#btnNetwork', '#diagOverlay', '#widgetWeather', '#widgetNavigation',
+        '#sidebar', '#btnNetwork', '#diagOverlay', '#widgetWeather', '#widgetNavigation', '#widgetCompass',
         '.wm-overlay', '.wm-content', '.wm-picker-overlay', '.wm-picker-content',
         '.climate-temp-zone', '.climate-temp-carousel',
-        '.onboarding-overlay', '.onboarding-content'
+        '.onboarding-overlay', '.onboarding-content',
+        '.orientation-picker-overlay', '.orientation-picker-content'
       ];
       for (const selector of exclude) {
         if (e.target.closest(selector)) return;
@@ -482,6 +494,12 @@ async function initUI() {
         e.key === 'setting_appsSlotsCount' || e.key === 'setting_climateSlotsCount') {
       setTimeout(refreshOemFeedbackOnSlots, 100);
     }
+    if (e.key === 'setting_layoutProfile') {
+      const stored = storage.load('setting_layoutProfile');
+      if (modules.layoutProfile && typeof modules.layoutProfile.apply === 'function') {
+        modules.layoutProfile.apply(stored);
+      }
+    }
   });
 
   document.addEventListener("contextmenu", e => e.preventDefault());
@@ -502,8 +520,26 @@ async function initUI() {
 
 async function start() {
   try {
+    if (modules.layoutProfile && typeof modules.layoutProfile.init === 'function') {
+      modules.layoutProfile.init();
+    }
+
     if (modules.climate) await modules.climate.init();
     await initUI();
+
+    if (modules.orientationPicker && !modules.orientationPicker.isResolved()) {
+      setTimeout(() => {
+        modules.orientationPicker.show();
+        const checkInterval = setInterval(() => {
+          if (modules.orientationPicker.isResolved()) {
+            clearInterval(checkInterval);
+            if (modules.onboarding) {
+              setTimeout(() => modules.onboarding.init(), 400);
+            }
+          }
+        }, 250);
+      }, 600);
+    }
   } catch (e) {
     console.error('[Main] Ошибка инициализации:', e);
   } finally {

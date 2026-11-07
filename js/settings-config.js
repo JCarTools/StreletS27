@@ -1,7 +1,6 @@
 /**********************************************
  * Модуль: Конфигурация настроек (Схема)
- * [FIX] showDataWidget — общий выключатель виджета данных.
- *       showNetworkStatus — только значок сети.
+ * [NEW] showClimateTempCarousel — включение/выключение карусели температуры.
  **********************************************/
 
 modules.settingsConfig = (function() {
@@ -11,14 +10,15 @@ modules.settingsConfig = (function() {
       settings: [
         { id: 'showClock', type: 'toggle', label: 'Показывать виджет часов', default: true },
         { id: 'showClimate', type: 'toggle', label: 'Показывать виджет климата', default: true },
-        { id: 'showApps', type: 'toggle', label: 'Показывать виджет приложений', default: true },
+        { id: 'showApps', type: 'toggle', label: 'Показывать виджет приложений', default: false },
         { id: 'showWeather', type: 'toggle', label: 'Показывать виджет погоды', default: false },
-        { id: 'showMiniMap', type: 'toggle', label: 'Показывать виджет мини-карты', default: false },
+        { id: 'showCompass', type: 'toggle', label: 'Показывать виджет компаса', default: true },
+        { id: 'showMiniMap', type: 'toggle', label: 'Показывать виджет мини-карты', default: true },
         { id: 'showPlayer', type: 'toggle', label: 'Показывать виджет плеера', default: true },
         { id: 'showDataWidget', type: 'toggle', label: 'Показывать виджет данных (топливо/АКБ/диск/сеть)', default: true },
         { id: 'miniMapTheme', type: 'select', label: 'Тема мини-карты', options: ['День', 'Ночь', 'Авто'], default: 'Ночь' },
-        { id: 'widgetSize', type: 'range', label: 'Размер виджетов', min: 9, max: 20, step: 0.5, default: 13.5, unit: 'rem' },
-        { id: 'widgetOpacity', type: 'range', label: 'Прозрачность виджетов и кнопок', min: 0.3, max: 1, step: 0.01, default: 1, unit: '' },
+        { id: 'widgetSize', type: 'range', label: 'Размер виджетов', min: 9, max: 20, step: 0.5, default: 12.5, unit: 'rem' },
+        { id: 'widgetOpacity', type: 'range', label: 'Прозрачность виджетов и кнопок', min: 0.3, max: 1, step: 0.01, default: 0.85, unit: '' },
         { id: 'widgetBlur', type: 'range', label: 'Размытие фона', min: 0, max: 20, step: 1, default: 10, unit: 'px' },
         { id: 'widgetBottomMargin', type: 'range', label: 'Отступ виджетов снизу', min: 0, max: 5, step: 0.1, default: 0.5, unit: 'rem' }
       ]
@@ -30,6 +30,7 @@ modules.settingsConfig = (function() {
         { id: 'climateSlotsCount', type: 'select', label: 'Количество кнопок устройств', options: ['4', '6', '8'], default: '6' },
         { id: 'climateIconColor', type: 'select', label: 'Цвет иконок и свайпа климата', options: ['Белый', 'Черный', 'Красный', 'Оранжевый', 'Жёлтый', 'Зелёный', 'Голубой', 'Синий', 'Фиолетовый'], default: 'Белый' },
         { id: 'showClimateTemp', type: 'toggle', label: 'Свайп-регулировка температуры', default: true },
+        { id: 'showClimateTempCarousel', type: 'toggle', label: 'Карусель температуры (по клику на цифры)', default: true },
         {
           id: 'climateSwipeInvert',
           type: 'select',
@@ -37,8 +38,8 @@ modules.settingsConfig = (function() {
           options: ['Вверх — увеличение', 'Вверх — уменьшение'],
           default: 'Вверх — увеличение'
         },
-        { id: 'climateTempOpacity', type: 'range', label: 'Прозрачность цифр температуры', min: 0.1, max: 1, step: 0.05, default: 0.4, unit: '' },
-        { id: 'climateTempFontSize', type: 'range', label: 'Размер шрифта температуры', min: 4, max: 8, step: 0.5, default: 8, unit: 'rem' }
+        { id: 'climateTempOpacity', type: 'range', label: 'Прозрачность цифр температуры', min: 0.1, max: 1, step: 0.05, default: 0.25, unit: '' },
+        { id: 'climateTempFontSize', type: 'range', label: 'Размер шрифта температуры', min: 4, max: 8, step: 0.5, default: 7.5, unit: 'rem' }
       ]
     },
     dataWidget: {
@@ -79,8 +80,10 @@ modules.settingsConfig = (function() {
     behavior: {
       title: 'Поведение',
       settings: [
+        { id: 'screenOrientation', type: 'select', label: '🖥️ Ориентация экрана (профиль)', options: ['Горизонтальный', 'Вертикальный'], default: 'Горизонтальный' },
         { id: 'tapToChangeWallpaper', type: 'toggle', label: 'Тап по фону → смена обоев', default: true },
-        { id: 'doubleTapToHideWidgets', type: 'toggle', label: 'Двойной тап по фону → скрыть виджеты', default: false },
+        { id: 'doubleTapToHideWidgets', type: 'toggle', label: 'Двойной тап по фону → скрыть виджеты', default: true },
+        { id: 'screenDimMode', type: 'select', label: 'Затемнение экрана', options: ['День', 'Ночь', 'Авто по солнцу'], default: 'Авто по солнцу' },
         { id: 'onboardingReset', type: 'button', label: '🎓 Пройти обучение повторно', value: 'Запустить' }
       ]
     },
@@ -92,7 +95,9 @@ modules.settingsConfig = (function() {
         { id: 'offModeHidePlayer', type: 'toggle', label: 'Скрывать плеер в OFF-mode', default: true },
         { id: 'offModeHideNetwork', type: 'toggle', label: 'Скрывать виджет сети и данных', default: true },
         { id: 'offModeHideMiniMap', type: 'toggle', label: 'Скрывать мини-карту в OFF-mode', default: true },
-        { id: 'offModeHideRightButtons', type: 'toggle', label: 'Скрывать правые кнопки в OFF-mode', default: true }
+        { id: 'offModeHideRightButtons', type: 'toggle', label: 'Скрывать правые кнопки в OFF-mode', default: true },
+        { id: 'offModeHideWeather', type: 'toggle', label: 'Скрывать виджет погоды в OFF-mode', default: true },
+        { id: 'offModeHideCompass', type: 'toggle', label: 'Скрывать компас в OFF-mode', default: true }
       ]
     },
     about: {

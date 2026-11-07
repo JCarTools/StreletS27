@@ -3,6 +3,7 @@
  * Часть 2 из 3. Публичный API собирается в wallpaper-main.js.
  * [FIX] setVideoBackground: снимаем старые обработчики playing/canplay перед добавлением новых (утечка).
  * [FIX] clearVideoBackground: полный сброс обработчиков и watchdog.
+ * [FIX] updateOffModeWidgetVisibility: добавлено скрытие виджета погоды и обёрток (компас).
  **********************************************/
 
 modules.wallpaperVideo = (function() {
@@ -27,7 +28,6 @@ modules.wallpaperVideo = (function() {
   let isVideoModeActive = false;
   let glowTimeout = null;
 
-  // FIX: храним ссылки на текущие обработчики playing/canplay, чтобы снять их
   let activePlayingHandlers = null;
 
   function stopWatchdog() {
@@ -106,7 +106,6 @@ modules.wallpaperVideo = (function() {
 
     if (!url) return;
 
-    // FIX: сначала полный сброс, чтобы не накапливались листенеры
     clearVideoBackground();
 
     if (createdObjectUrl) {
@@ -184,6 +183,8 @@ modules.wallpaperVideo = (function() {
     const hideNetwork = storage.load('setting_offModeHideNetwork') !== false;
     const hideMiniMap = storage.load('setting_offModeHideMiniMap') !== false;
     const hideRightButtons = storage.load('setting_offModeHideRightButtons') !== false;
+    const hideWeather = storage.load('setting_offModeHideWeather') !== false;
+    const hideCompass = storage.load('setting_offModeHideCompass') !== false;
 
     const climateWidget = document.querySelector('.widget_climate');
     const appsWidget = document.querySelector('.widget_apps');
@@ -191,6 +192,8 @@ modules.wallpaperVideo = (function() {
     const networkWrapper = document.getElementById('networkWidgetWrapper');
     const miniMapWidget = document.getElementById('widgetNavigation');
     const rightButtons = document.querySelector('.right-buttons');
+    const weatherWidget = document.getElementById('widgetWeather');
+    const compassWidget = document.getElementById('widgetCompass');
 
     if (climateWidget) climateWidget.classList.toggle('off-mode-hidden', hideClimate);
     if (appsWidget) appsWidget.classList.toggle('off-mode-hidden', hideApps);
@@ -198,6 +201,8 @@ modules.wallpaperVideo = (function() {
     if (networkWrapper) networkWrapper.classList.toggle('off-mode-hidden', hideNetwork);
     if (miniMapWidget) miniMapWidget.classList.toggle('off-mode-hidden', hideMiniMap);
     if (rightButtons) rightButtons.classList.toggle('off-mode-hidden', hideRightButtons);
+    if (weatherWidget) weatherWidget.classList.toggle('off-mode-hidden', hideWeather);
+    if (compassWidget) compassWidget.classList.toggle('off-mode-hidden', hideCompass);
   }
 
   function showOffModeHint() {
@@ -262,7 +267,7 @@ modules.wallpaperVideo = (function() {
     const hint = document.querySelector('.off-mode-hint');
     if (hint) hint.remove();
 
-    document.querySelectorAll('.widget_climate, .widget_apps, .widget_player, .right-buttons, #networkWidgetWrapper, #widgetNavigation')
+    document.querySelectorAll('.widget_climate, .widget_apps, .widget_player, .right-buttons, #networkWidgetWrapper, #widgetNavigation, #widgetWeather, #widgetCompass')
       .forEach(w => w.classList.remove('off-mode-hidden'));
 
     const tw = document.querySelector('.widget_time');

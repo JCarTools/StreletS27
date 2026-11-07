@@ -2,8 +2,7 @@
  * Модуль: Логика настроек — ядро
  * Часть 1 из 2. Слоты — в settings-slots.js.
  * Точка входа и публичный API — в settings.js.
- * [FIX] loadSetting: если сохранено пустое значение и есть default — используем default.
- * [NEW] getClimateColorInfo: hex + rgb для цвета содержимого климата.
+ * [NEW] screenOrientation: хранение 'portrait'|'landscape', UI — 'Горизонтальный'|'Вертикальный'.
  **********************************************/
 
 modules.settingsCore = (function() {
@@ -12,7 +11,6 @@ modules.settingsCore = (function() {
   const TEXT_SYS_SETTINGS_UNAVAILABLE = 'Системные настройки недоступны';
   const TOAST_DURATION_SHORT = 2000;
 
-  // Палитра цветов климата (иконки + свайп)
   const CLIMATE_COLOR_MAP = {
     'Белый':       { hex: '#ffffff', rgb: '255,255,255' },
     'Черный':      { hex: '#000000', rgb: '0,0,0' },
@@ -34,6 +32,18 @@ modules.settingsCore = (function() {
 
   let isApplyingSetting = false;
 
+  // Хелперы конвертации ориентации
+  function orientationToStorage(uiValue) {
+    if (uiValue === 'Вертикальный') return 'portrait';
+    if (uiValue === 'Горизонтальный') return 'landscape';
+    return 'landscape';
+  }
+  function orientationFromStorage(stored) {
+    if (stored === 'portrait') return 'Вертикальный';
+    if (stored === 'landscape') return 'Горизонтальный';
+    return 'Горизонтальный';
+  }
+
   function loadSetting(key) {
     for (const category of Object.values(modules.settingsConfig.schema)) {
       for (const setting of category.settings) {
@@ -41,6 +51,12 @@ modules.settingsCore = (function() {
           return setting.value;
         }
       }
+    }
+
+    // Ориентация хранится отдельно (setting_layoutProfile)
+    if (key === 'screenOrientation') {
+      const stored = storage.load('setting_layoutProfile');
+      return orientationFromStorage(stored);
     }
 
     const saved = storage.load(`${STORAGE_PREFIX}${key}`);
@@ -55,6 +71,13 @@ modules.settingsCore = (function() {
   }
 
   function saveSetting(key, value) {
+    // Ориентация — сохраняем как layoutProfile
+    if (key === 'screenOrientation') {
+      const stored = orientationToStorage(value);
+      storage.save('setting_layoutProfile', stored);
+      modules.settings.applySetting(key, value);
+      return;
+    }
     storage.save(`${STORAGE_PREFIX}${key}`, value);
     modules.settings.applySetting(key, value);
   }
@@ -141,6 +164,7 @@ modules.settingsCore = (function() {
     for (const category of Object.values(modules.settingsConfig.schema)) {
       for (const setting of category.settings) {
         if (setting.type !== 'qr' && setting.type !== 'info' && setting.type !== 'button') {
+          if (setting.id === 'screenOrientation') continue; // отдельный ключ
           storage.remove(`${STORAGE_PREFIX}${setting.id}`);
         }
       }
@@ -161,7 +185,8 @@ modules.settingsCore = (function() {
       'setting_wallpaperCustomServerEnabled', 'setting_wallpaperCustomServer2Enabled',
       'wallpaper_hidden_builtins', 'wallpaper_custom_list',
       'climateTrunkOpen', 'setting_user_custom_url', 'setting_user_custom_enabled',
-      'widgetOrder', 'onboarding_completed'
+      'widgetOrder', 'onboarding_completed',
+      'setting_layoutProfile'
     ];
     runtimeKeys.forEach(k => storage.remove(k));
     try { await idbStore.clear(); } catch (e) { console.warn(e); }
@@ -186,6 +211,8 @@ modules.settingsCore = (function() {
     openSystemSettings,
     clearAllAppIcons,
     performFullReset,
-    getClimateColorInfo
+    getClimateColorInfo,
+    orientationToStorage,
+    orientationFromStorage
   };
 })();
