@@ -1,0 +1,253 @@
+/* ============================================
+   ЭКРАН ПЕРВОГО ВЫБОРА ОРИЕНТАЦИИ
+   ============================================ */
+
+.orientation-picker-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(7, 9, 13, 0.92);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s ease, visibility 0.3s ease;
+  padding: 1rem;
+}
+
+.orientation-picker-overlay.visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+.orientation-picker-content {
+  width: min(92vw, 640px);
+  background: linear-gradient(180deg, rgba(28, 33, 44, 0.98), rgba(16, 19, 26, 0.96));
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 1.8rem;
+  padding: 2rem 1.5rem 1.5rem;
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  transform: scale(0.95);
+  transition: transform 0.3s cubic-bezier(0.34, 1.2, 0.64, 1);
+}
+
+.orientation-picker-overlay.visible .orientation-picker-content {
+  transform: scale(1);
+}
+
+body.light .orientation-picker-content {
+  background: linear-gradient(180deg, rgba(245, 248, 255, 0.98), rgba(228, 234, 245, 0.96));
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
+.orientation-picker-title {
+  font-size: 1.4rem;
+  font-weight: 700;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.95);
+  margin-bottom: 0.5rem;
+}
+
+body.light .orientation-picker-title {
+  color: rgba(28, 35, 48, 0.95);
+}
+
+.orientation-picker-subtitle {
+  font-size: 0.9rem;
+  text-align: center;
+  color: rgba(220, 228, 240, 0.7);
+  margin-bottom: 1.6rem;
+  line-height: 1.5;
+}
+
+body.light .orientation-picker-subtitle {
+  color: rgba(50, 60, 80, 0.7);
+}
+
+.orientation-picker-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 1.2rem;
+}
+
+@media (max-width: 560px) {
+  .orientation-picker-options {
+    grid-template-columns: 1fr;
+  }
+}
+
+.orientation-option {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  padding: 1.2rem 0.8rem;
+  border-radius: 1.2rem;
+  border: 2px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(180deg, rgba(42, 48, 60, 0.5), rgba(22, 26, 34, 0.4));
+  cursor: pointer;
+  transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+  text-align: center;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body.light .orientation-option {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.8), rgba(236, 240, 247, 0.6));
+  border-color: rgba(86, 97, 124, 0.12);
+}
+
+.orientation-option:hover {
+  transform: translateY(-2px);
+  border-color: rgba(120, 160, 240, 0.4);
+}
+
+.orientation-option.selected {
+  border-color: rgba(120, 160, 240, 0.9);
+  background: linear-gradient(180deg, rgba(70, 100, 160, 0.45), rgba(40, 60, 100, 0.35));
+  box-shadow: 0 0 0 3px rgba(120, 160, 240, 0.15), 0 12px 24px rgba(0, 0, 0, 0.2);
+}
+
+body.light .orientation-option.selected {
+  background: linear-gradient(180deg, rgba(200, 220, 255, 0.7), rgba(180, 205, 250, 0.5));
+  border-color: rgba(80, 130, 220, 0.8);
+  box-shadow: 0 0 0 3px rgba(80, 130, 220, 0.12), 0 12px 24px rgba(0, 0, 0, 0.08);
+}
+
+.orientation-option__preview {
+  width: 100%;
+  height: 110px;
+  display: flex;
+  background: rgba(0, 0, 0, 0.18);
+  border-radius: 0.8rem;
+  position: relative;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+body.light .orientation-option__preview {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.orientation-option__preview--landscape {
+  flex-direction: row;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 4px;
+  padding: 0 8px 10px;
+}
+
+.orientation-option__preview--portrait {
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-end;
+  gap: 4px;
+  padding: 10px 8px;
+}
+
+.orientation-option__preview--portrait .row {
+  display: flex;
+  gap: 4px;
+  justify-content: center;
+  align-items: center;
+}
+
+.orientation-option__preview .sq {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  border-radius: 4px;
+  background: linear-gradient(180deg, rgba(120, 160, 240, 0.95), rgba(70, 100, 160, 0.8));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.orientation-option__label {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: rgba(244, 247, 252, 0.92);
+}
+
+body.light .orientation-option__label {
+  color: rgba(28, 35, 48, 0.92);
+}
+
+.orientation-option__hint {
+  font-size: 0.72rem;
+  color: rgba(191, 199, 211, 0.6);
+  line-height: 1.3;
+}
+
+body.light .orientation-option__hint {
+  color: rgba(66, 76, 97, 0.65);
+}
+
+/* === Блок кнопок === */
+.orientation-picker-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.8rem;
+}
+
+@media (max-width: 560px) {
+  .orientation-picker-buttons {
+    grid-template-columns: 1fr;
+  }
+}
+
+.orientation-picker-tutorial,
+.orientation-picker-apply {
+  width: 100%;
+  padding: 0.9rem 1rem;
+  border-radius: 1rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.15s ease, opacity 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.orientation-picker-tutorial {
+  border: 1px solid rgba(140, 180, 255, 0.35);
+  background: linear-gradient(180deg, rgba(56, 78, 130, 0.85), rgba(32, 46, 78, 0.75));
+  color: rgba(200, 225, 255, 0.95);
+}
+
+.orientation-picker-apply {
+  border: 1px solid rgba(180, 203, 255, 0.2);
+  background: linear-gradient(180deg, rgba(76, 104, 157, 0.96), rgba(41, 60, 95, 0.82));
+  color: white;
+}
+
+.orientation-picker-tutorial:disabled,
+.orientation-picker-apply:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.orientation-picker-tutorial:not(:disabled):hover,
+.orientation-picker-apply:not(:disabled):hover {
+  transform: translateY(-1px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 8px 16px rgba(0, 0, 0, 0.2);
+}
+
+.orientation-picker-tutorial:not(:disabled):active,
+.orientation-picker-apply:not(:disabled):active {
+  transform: scale(0.98);
+}
+
+body.light .orientation-picker-tutorial {
+  background: linear-gradient(180deg, rgba(200, 220, 255, 0.8), rgba(180, 205, 250, 0.65));
+  border-color: rgba(90, 130, 210, 0.35);
+  color: rgba(30, 55, 105, 0.95);
+}
+
+body.light .orientation-picker-apply {
+  background: linear-gradient(180deg, rgba(219, 230, 252, 0.94), rgba(193, 210, 242, 0.78));
+  border-color: rgba(97, 125, 189, 0.18);
+  color: rgba(36, 50, 83, 0.94);
+}
