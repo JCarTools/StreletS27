@@ -3,6 +3,11 @@
  * - Применяет класс body.layout-portrait / body.layout-landscape
  * - Хранит выбор в localStorage (setting_layoutProfile)
  * - Первичный выбор ориентации (если не задано) — через onboarding-orientation
+ * [FIX] apply(): вызов widgetsReorder.refresh() отложен через requestAnimationFrame.
+ *       Раньше refresh() вызывался синхронно сразу после добавления класса,
+ *       до того как браузер применял CSS (display: contents -> display: flex).
+ *       Из-за этого widgetsReorder не находил верхний ряд в портретном режиме
+ *       и не мог перетащить туда виджеты на некоторых устройствах.
  **********************************************/
 
 modules.layoutProfile = (function() {
@@ -11,6 +16,7 @@ modules.layoutProfile = (function() {
   const LANDSCAPE_CLASS = 'layout-landscape';
 
   let current = null;
+  let refreshTimer = null;
 
   function normalize(value) {
     if (value === 'portrait') return 'portrait';
@@ -29,10 +35,19 @@ modules.layoutProfile = (function() {
     document.body.classList.remove(PORTRAIT_CLASS, LANDSCAPE_CLASS);
     document.body.classList.add(p === 'portrait' ? PORTRAIT_CLASS : LANDSCAPE_CLASS);
 
-    // Уведомляем widgets-reorder, что раскладка поменялась
-    if (modules.widgetsReorder && typeof modules.widgetsReorder.refresh === 'function') {
-      try { modules.widgetsReorder.refresh(); } catch (e) {}
-    }
+    // [FIX] Откладываем обновление раскладки виджетов, чтобы браузер успел
+    // пересчитать стили (display: contents -> flex). Иначе widgetsReorder
+    // не видит верхний ряд и не может в него перетащить виджеты.
+    if (refreshTimer) clearTimeout(refreshTimer);
+    
+    requestAnimationFrame(() => {
+      refreshTimer = setTimeout(() => {
+        refreshTimer = null;
+        if (modules.widgetsReorder && typeof modules.widgetsReorder.refresh === 'function') {
+          try { modules.widgetsReorder.refresh(); } catch (e) {}
+        }
+      }, 50);
+    });
   }
 
   function set(profile, opts) {

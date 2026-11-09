@@ -9,6 +9,9 @@
  *       id просто дописываются в конец, а отсутствующие молча выпадают
  *       из примения (без перезаписи localStorage).
  * [FIX] Не цепляемся за вложенные .widget внутри .widget-wrapper.
+ * [FIX] refresh(): добавлена проверка ensureRowsExist() для портретного режима.
+ *       Если DOM еще не перестроился (нет .dashboard-row--top/bottom), ряды
+ *       создаются принудительно. Иначе верхний ряд терялся на некоторых машинах.
  **********************************************/
 
 modules.widgetsReorder = (function() {
@@ -67,8 +70,6 @@ modules.widgetsReorder = (function() {
            el.classList.contains('widget_compass');
   }
 
-  // [FIX] Стабильный id: не затираем уже назначенный.
-  // Приоритет: dataset.widgetId -> id -> вычисленный по классу.
   function getWidgetId(el) {
     if (!el) return null;
     if (el.dataset && el.dataset.widgetId) return el.dataset.widgetId;
@@ -94,7 +95,6 @@ modules.widgetsReorder = (function() {
     return null;
   }
 
-  // [FIX] Корневой виджет — прямой ребёнок .dashboard или .dashboard-row.
   function getRootWidget(node) {
     if (!node) return null;
     let cur = node;
@@ -120,7 +120,6 @@ modules.widgetsReorder = (function() {
     });
   }
 
-  // [FIX] Только «корневые» виджеты (прямые дети dashboard / dashboard-row).
   function collectFromContainer(container) {
     const out = [];
     Array.from(container.children).forEach(el => {
@@ -135,7 +134,6 @@ modules.widgetsReorder = (function() {
     return out;
   }
 
-  // [FIX] Возвращаем ВСЕ виджеты, включая скрытые — иначе порядок ломается.
   function getAllWidgets() {
     return collectFromContainer(dashboard);
   }
@@ -159,6 +157,37 @@ modules.widgetsReorder = (function() {
     return Array.from(dashboard.querySelectorAll('.dashboard-row'));
   }
 
+  // [FIX] Гарантируем, что в портретном режиме есть ровно два ряда (row1/row2).
+  // Если DOM был в горизонтальном режиме (display: contents), браузер мог
+  // не успеть пересчитать стили, и getRows() возвращал 1 ряд.
+  function ensureRowsExist() {
+    if (!isPortrait()) return;
+    const rows = getRows();
+    if (rows.length >= 2) return; // Всё уже на месте
+
+    // Если рядов меньше 2 — создаем/восстанавливаем структуру.
+    let row1 = dashboard.querySelector('.dashboard-row--top');
+    let row2 = dashboard.querySelector('.dashboard-row--bottom');
+
+    if (!row1) {
+      row1 = document.createElement('div');
+      row1.className = 'dashboard-row dashboard-row--top';
+    }
+    if (!row2) {
+      row2 = document.createElement('div');
+      row2.className = 'dashboard-row dashboard-row--bottom';
+    }
+
+    // Переносим все виджеты в row1, если они были напрямую в .dashboard
+    const directWidgets = Array.from(dashboard.children).filter(isWidgetElement);
+    directWidgets.forEach(w => row1.appendChild(w));
+
+    // Очищаем дашборд и вставляем ряды
+    dashboard.innerHTML = '';
+    dashboard.appendChild(row1);
+    dashboard.appendChild(row2);
+  }
+
   function readRowIds(row) {
     if (!row) return [];
     return Array.from(row.children)
@@ -180,8 +209,6 @@ modules.widgetsReorder = (function() {
     return true;
   }
 
-  // [FIX] Применяем порядок: сначала идут сохранённые, затем недостающие
-  // (в текущем DOM-порядке) — без сброса localStorage.
   function applyLandscapeOrder() {
     const saved = getSavedLandscapeOrder();
     const allWidgets = collectFromContainer(dashboard);
@@ -200,7 +227,6 @@ modules.widgetsReorder = (function() {
     const byId = new Map();
     allWidgets.forEach(el => byId.set(getWidgetId(el), el));
 
-    // Собираем итоговый список: сохранённые id + недостающие в конце.
     const orderedIds = [];
     const seen = new Set();
     saved.forEach(id => {
@@ -224,7 +250,6 @@ modules.widgetsReorder = (function() {
       if (el) targetRow.appendChild(el);
     });
 
-    // Обновляем localStorage, добавляя недостающие id, но сохраняя исходный порядок.
     saveLandscapeOrder(orderedIds);
   }
 
@@ -260,7 +285,6 @@ modules.widgetsReorder = (function() {
     const byId = new Map();
     allWidgets.forEach(el => byId.set(getWidgetId(el), el));
 
-    // Для каждого ряда: сохранённые + недостающие (из общего пула) в конце.
     const buildOrdered = (savedIds, actualIds) => {
       const ordered = [];
       const seen = new Set();
@@ -279,11 +303,8 @@ modules.widgetsReorder = (function() {
       return ordered;
     };
 
-    // Соберём все id, которые уже «заняты» сохранёнными рядами.
     const claimed = new Set([...savedRow1, ...savedRow2]);
 
-    // Недостающие (новые) — сначала распределяем по их текущему ряду,
-    // иначе складываем в row1.
     const newRow1 = [];
     const newRow2 = [];
     const row1Children = new Set(readRowIds(rows[0]));
@@ -649,6 +670,7 @@ modules.widgetsReorder = (function() {
 
   function refresh() {
     assignDefaultIds();
+    ensureRowsExist(); // [FIX] Проверяем/создаем ряды для портретного режима
     applyOrder();
   }
 
