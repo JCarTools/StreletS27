@@ -1,0 +1,154 @@
+/* ============================================
+   ОНБОРДИНГ (Обучающие экраны)
+   ============================================ */
+
+.onboarding-overlay {
+  position: fixed;
+  inset: 0;
+  background: transparent; 
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50002;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  transition: opacity 0.3s ease;
+  opacity: 1;
+}
+
+.onboarding-content {
+  position: relative;
+  width: min(92vw, 600px);
+  background: #1c1f26; 
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 1.5rem;
+  padding: 1.5rem;
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.8);
+  margin-bottom: 5vh;
+}
+
+.onboarding-title {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.95);
+  margin-bottom: 1rem;
+}
+
+/* Новый блок для описания виджетов (карточки) */
+.onboarding-feature-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  margin-bottom: 1.5rem;
+}
+
+.onboarding-feature-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.8rem;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 0.8rem 1rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.onboarding-feature-icon {
+  font-size: 1.4rem;
+  line-height: 1.2;
+}
+
+.onboarding-feature-text {
+  flex: 1;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  color: rgba(238, 242, 247, 0.85);
+}
+
+.onboarding-feature-text strong {
+  color: rgba(255, 255, 255, 0.95);
+  display: block;
+  margin-bottom: 0.2rem;
+}
+
+.onboarding-hint {
+  background: rgba(100, 150, 255, 0.15);
+  border-left: 3px solid rgba(100, 150, 255, 0.8);
+  padding: 0.8rem 1rem;
+  border-radius: 0 0.8rem 0.8rem 0;
+  font-size: 0.9rem;
+  color: rgba(220, 235, 255, 0.95);
+  margin-bottom: 1.5rem;
+}
+
+.onboarding-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+.onboarding-buttons .modal-btn {
+  min-width: 6.7rem;
+  padding: 0.72rem 1rem;
+  border-radius: 0.95rem;
+  border: 1px solid rgba(255,255,255,0.08);
+  font-size: 0.92rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
+}
+
+/* Светлая тема */
+body.light .onboarding-content {
+  background: #f0f2f5;
+  border-color: rgba(0, 0, 0, 0.1);
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.3);
+}
+body.light .onboarding-title { color: rgba(28, 35, 48, 0.95); }
+
+body.light .onboarding-feature-item {
+  background: rgba(0, 0, 0, 0.03);
+  border-color: rgba(0, 0, 0, 0.05);
+}
+body.light .onboarding-feature-text { color: rgba(45, 56, 78, 0.9); }
+body.light .onboarding-feature-text strong { color: rgba(20, 30, 50, 0.95); }
+
+body.light .onboarding-hint {
+  background: rgba(80, 120, 200, 0.1);
+  border-left-color: rgba(80, 120, 200, 0.6);
+  color: rgba(30, 50, 90, 0.95);
+}
+
+/* ============================================
+   ЭФФЕКТ ПОДСВЕТКИ (SPOTLIGHT МАСКОЙ)
+   ============================================ */
+
+.spotlight-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.85);
+  pointer-events: none;
+  z-index: 50001;
+  clip-path: polygon(0% 0%, 100% 0%, 100% 100%, 0% 100%);
+  transition: clip-path 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.spotlight-ring {
+  position: fixed;
+  border-radius: 1.5rem;
+  pointer-events: none;
+  z-index: 50001;
+  border: 2px solid rgba(100, 150, 255, 0.9);
+  box-shadow: inset 0 0 20px rgba(100, 150, 255, 0.4), 0 0 15px rgba(100, 150, 255, 0.3);
+  animation: spotlightPulse 2s infinite alternate;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  display: none;
+}
+
+@keyframes spotlightPulse {
+  0% { border-color: rgba(100, 150, 255, 0.5); box-shadow: inset 0 0 10px rgba(100, 150, 255, 0.2), 0 0 10px rgba(100, 150, 255, 0.1); }
+  100% { border-color: rgba(100, 150, 255, 1); box-shadow: inset 0 0 25px rgba(100, 150, 255, 0.6), 0 0 20px rgba(100, 150, 255, 0.4); }
+}

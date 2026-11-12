@@ -1,0 +1,136 @@
+/* === ПРАВЫЕ КНОПКИ === */
+.right-buttons {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.4rem;
+  height: var(--widget-size);
+  width: 4.5rem;
+  flex-shrink: 0;
+  padding: 0.45rem;
+  border-radius: 1.6rem;
+  /* Единственная внешняя подложка (как у остальных виджетов) */
+  background: var(--bg-widget);
+  border: 1px solid var(--oem-border-soft);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), var(--oem-shadow-soft);
+  backdrop-filter: blur(10px);
+  opacity: var(--widget-opacity, 1);
+}
+body.light .right-buttons {
+  background: rgba(211, 212, 221, 0.7);
+  border-color: rgba(83, 94, 125, 0.09);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.68), 0 12px 22px rgba(93, 110, 141, 0.1);
+}
+
+.right-buttons::before,
+.right-buttons::after {
+  display: none;
+}
+
+/* Сами кнопки: строго квадратные, с возвращенным контуром и фоном */
+.widget_buttons {
+  position: relative;
+  z-index: 1;
+  width: calc(100% - 0.2rem);
+  aspect-ratio: 1 / 1;
+  flex-shrink: 0;
+  border-radius: 0.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  overflow: hidden;
+  /* Контур и фон кнопки */
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(145deg, rgba(45, 52, 65, 0.6), rgba(28, 33, 42, 0.4));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 4px 8px rgba(0, 0, 0, 0.1);
+  transition: background 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
+  transform-origin: center center;
+  -webkit-tap-highlight-color: transparent;
+  opacity: var(--widget-opacity, 1);
+}
+body.light .widget_buttons {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.8), rgba(240, 245, 255, 0.6));
+  border-color: rgba(0, 0, 0, 0.06);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 4px 8px rgba(0, 0, 0, 0.05);
+}
+
+.widget_buttons::before {
+  display: none;
+}
+
+.right-button__halo {
+  display: none;
+}
+
+.right-button__icon {
+  position: relative;
+  z-index: 3;
+  width: 1.6rem;
+  height: 1.6rem;
+  color: rgba(255, 255, 255, 0.9);
+  opacity: 0.95;
+  transition: transform 0.2s cubic-bezier(0.23, 1, 0.32, 1), opacity 0.2s ease, filter 0.2s ease;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+}
+body.light .right-button__icon {
+  color: rgba(28, 35, 48, 0.8);
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.1));
+}
+
+/* Наведение и нажатие */
+.widget_buttons:hover {
+  background: linear-gradient(145deg, rgba(55, 63, 78, 0.7), rgba(35, 41, 52, 0.5));
+  border-color: rgba(255, 255, 255, 0.12);
+}
+body.light .widget_buttons:hover {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 1), rgba(250, 253, 255, 0.8));
+  border-color: rgba(0, 0, 0, 0.1);
+}
+
+.widget_buttons:active,
+.widget_buttons.is-pressed {
+  background: rgba(255, 255, 255, 0.12);
+  transform: scale(0.92);
+  transition-duration: 0.05s;
+}
+body.light .widget_buttons:active,
+body.light .widget_buttons.is-pressed {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.widget_buttons.is-pressed .right-button__icon {
+  transform: scale(0.9);
+}
+.widget_buttons.is-releasing {
+  animation: oemTouchRebound 250ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.widget_buttons.is-releasing .right-button__icon {
+  animation: oemIconRebound 250ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+/* Активное состояние для верхней кнопки (автосмена обоев) */
+#btnWallpaper.active {
+  background: rgba(70, 100, 150, 0.4) !important;
+  border-color: rgba(120, 160, 240, 0.3) !important;
+}
+body.light #btnWallpaper.active {
+  background: rgba(200, 220, 255, 0.6) !important;
+  border-color: rgba(100, 150, 255, 0.4) !important;
+}
+#btnWallpaper.active .right-button__icon {
+  color: rgba(180, 210, 255, 1);
+}
+body.light #btnWallpaper.active .right-button__icon {
+  color: rgba(40, 80, 160, 1);
+}
+
+@keyframes smartWallpaperBreath {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+#btnWallpaper.active {
+  animation: smartWallpaperBreath 4s ease-in-out infinite;
+}

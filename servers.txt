@@ -1,0 +1,8 @@
+Пейзажи https://bingw.jasonzeng.dev/?resolution=1920x1080&index=random
+Автомобили https://api.icofun.cn/API/360bz.php?n=10&type=image
+Бинг https://bing.biturl.top/?resolution=1920&format=image&index=random
+Милые животные https://api.icofun.cn/API/360bz.php?n=8&type=image
+Ч/Б Picsum https://picsum.photos/1920/1080?grayscale
+Аниме-арт https://uapis.cn/api/v1/random/image?category=acg&type=pc
+Случайные 360bz https://api.icofun.cn/API/360bz.php?n=4&type=image
+Случайные фото https://hmoexyz.qzz.io/api/image/random
