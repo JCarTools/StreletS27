@@ -5,7 +5,7 @@
 window.MANIFEST = {
   "name": "Strelets27",
   "short_name": "S27",
-  "version": "2.6.0",
+  "version": "2.6.1",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#0F0D13",
